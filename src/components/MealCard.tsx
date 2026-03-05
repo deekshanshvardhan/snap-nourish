@@ -1,4 +1,4 @@
-import { Camera, Type } from "lucide-react";
+import { Camera, Type, Pencil } from "lucide-react";
 
 interface Meal {
   id: number;
@@ -11,7 +11,15 @@ interface Meal {
   fat: number;
 }
 
-const MealCard = ({ meal }: { meal: Meal }) => {
+const MealCard = ({
+  meal,
+  label,
+  onEdit,
+}: {
+  meal: Meal;
+  label?: string;
+  onEdit?: () => void;
+}) => {
   const time = new Date(meal.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -28,11 +36,20 @@ const MealCard = ({ meal }: { meal: Meal }) => {
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-body text-sm text-foreground truncate">{meal.description}</p>
-        <p className="text-xs text-muted-foreground font-body">{time}</p>
+        <p className="text-xs text-muted-foreground font-body">
+          {label || "Meal Logged"} · {time}
+        </p>
       </div>
-      <div className="text-right shrink-0">
-        <p className="font-display text-lg text-foreground">{meal.calories}</p>
-        <p className="text-xs text-muted-foreground font-body">kcal</p>
+      <div className="text-right shrink-0 flex items-center gap-3">
+        <div>
+          <p className="font-display text-lg text-foreground">{meal.calories}</p>
+          <p className="text-xs text-muted-foreground font-body">kcal</p>
+        </div>
+        {onEdit && (
+          <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        )}
       </div>
     </div>
   );
