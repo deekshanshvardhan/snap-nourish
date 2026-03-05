@@ -13,7 +13,17 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Instrument Serif', 'serif'],
+        body: ['DM Sans', 'sans-serif'],
+      },
       colors: {
+        nutrition: {
+          protein: "hsl(var(--nutrition-protein))",
+          carbs: "hsl(var(--nutrition-carbs))",
+          fat: "hsl(var(--nutrition-fat))",
+          calories: "hsl(var(--nutrition-calories))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
