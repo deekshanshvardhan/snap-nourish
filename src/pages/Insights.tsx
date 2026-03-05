@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import BottomNav from "@/components/BottomNav";
 import NutritionRing from "@/components/NutritionRing";
 import MealCard from "@/components/MealCard";
@@ -15,12 +15,26 @@ interface Meal {
   fat: number;
 }
 
+const getMealLabel = (meal: Meal): string => {
+  const hour = new Date(meal.timestamp).getHours();
+  if (hour >= 5 && hour < 11) return "Breakfast";
+  if (hour >= 11 && hour < 15) return "Lunch";
+  if (hour >= 15 && hour < 17) return "Snack";
+  if (hour >= 17 && hour < 22) return "Dinner";
+  return "Meal Logged";
+};
+
 const Insights = () => {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [mealsVersion, setMealsVersion] = useState(0);
+
   const todayMeals = useMemo(() => {
     const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
     const today = new Date().toDateString();
     return meals.filter((m) => new Date(m.timestamp).toDateString() === today);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mealsVersion]);
 
   const totals = useMemo(() => {
     return todayMeals.reduce(
@@ -35,6 +49,39 @@ const Insights = () => {
   }, [todayMeals]);
 
   const goal = 2000;
+  const proteinGoal = 120;
+  const carbGoal = 250;
+
+  const interpretation = useMemo(() => {
+    if (todayMeals.length === 0) return null;
+    if (totals.calories > goal) return "You've exceeded your calorie target today.";
+    if (totals.protein < proteinGoal * 0.5 && todayMeals.length >= 2)
+      return "Your protein intake is low today.";
+    if (totals.carbs > carbGoal) return "Your carb intake is higher than usual.";
+    if (totals.calories >= goal * 0.7 && totals.calories <= goal)
+      return "You are within your calorie target today.";
+    if (totals.calories < goal * 0.4 && todayMeals.length >= 1)
+      return "You're well under your calorie goal — keep logging.";
+    return "Keep logging to see your full daily picture.";
+  }, [totals, todayMeals.length]);
+
+  const startEdit = (meal: Meal) => {
+    setEditingId(meal.id);
+    setEditText(meal.description);
+  };
+
+  const saveEdit = () => {
+    if (editingId === null) return;
+    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const idx = meals.findIndex((m) => m.id === editingId);
+    if (idx !== -1 && editText.trim()) {
+      meals[idx].description = editText.trim();
+      localStorage.setItem("meals", JSON.stringify(meals));
+      setMealsVersion((v) => v + 1);
+    }
+    setEditingId(null);
+    setEditText("");
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background max-w-md mx-auto pb-24">
@@ -50,7 +97,7 @@ const Insights = () => {
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="px-6 mb-8"
+        className="px-6 mb-4"
       >
         <div className="bg-card rounded-3xl p-8 flex items-center gap-8 shadow-sm border border-border">
           <NutritionRing value={totals.calories} max={goal} />
@@ -63,6 +110,20 @@ const Insights = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* Interpretation */}
+      {interpretation && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className="px-6 mb-6"
+        >
+          <p className="text-sm text-muted-foreground font-body italic px-1">
+            💡 {interpretation}
+          </p>
+        </motion.div>
+      )}
 
       {/* Macros */}
       <motion.div
@@ -102,7 +163,45 @@ const Insights = () => {
         ) : (
           <div className="space-y-3">
             {todayMeals.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
+              <div key={meal.id}>
+                <MealCard
+                  meal={meal}
+                  label={getMealLabel(meal)}
+                  onEdit={() => startEdit(meal)}
+                />
+                <AnimatePresence>
+                  {editingId === meal.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-card rounded-b-2xl px-4 pb-3 -mt-1 border border-t-0 border-border flex gap-2">
+                        <input
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="flex-1 bg-secondary rounded-lg px-3 py-2 text-sm font-body text-foreground outline-none"
+                          onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={saveEdit}
+                          className="text-xs font-body font-medium text-primary px-3"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="text-xs font-body text-muted-foreground px-2"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             ))}
           </div>
         )}
