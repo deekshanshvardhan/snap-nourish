@@ -90,8 +90,6 @@ const Home = () => {
     showOverlay(meal);
   };
 
-  const handleRetake = () => {
-    if (overlay) {
   const handleRetake = (meal: Meal) => {
     const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
     const idx = meals.findIndex((m) => m.id === meal.id);
