@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Image, Type, X, Send, RefreshCw, Check } from "lucide-react";
+import { Camera, Image, Type, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BottomNav from "@/components/BottomNav";
 import QuickLog from "@/components/QuickLog";
+import MealOverlay from "@/components/MealOverlay";
 import {
   detectTemplateCandidates,
   createTemplateFromMeal,
