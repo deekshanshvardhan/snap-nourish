@@ -92,17 +92,14 @@ const Home = () => {
 
   const handleRetake = () => {
     if (overlay) {
-      // Remove the last logged meal
-      const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
-      const idx = meals.findIndex((m) => m.id === overlay.id);
-      if (idx !== -1) {
-        meals.splice(idx, 1);
-        localStorage.setItem("meals", JSON.stringify(meals));
-      }
+  const handleRetake = (meal: Meal) => {
+    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const idx = meals.findIndex((m) => m.id === meal.id);
+    if (idx !== -1) {
+      meals.splice(idx, 1);
+      localStorage.setItem("meals", JSON.stringify(meals));
     }
-    if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
     setOverlay(null);
-    setOverlayText("");
   };
 
   const handleTextLog = () => {
