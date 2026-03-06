@@ -32,9 +32,7 @@ const Home = () => {
   const [textInput, setTextInput] = useState("");
   const [flash, setFlash] = useState(false);
   const [overlay, setOverlay] = useState<Meal | null>(null);
-  const [overlayText, setOverlayText] = useState("");
   const [quickLogKey, setQuickLogKey] = useState(0);
-  const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Template prompt state
   const [templateCandidate, setTemplateCandidate] = useState<Meal | null>(null);
