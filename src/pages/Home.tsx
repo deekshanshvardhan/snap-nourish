@@ -195,53 +195,11 @@ const Home = () => {
         {/* Post-capture overlay */}
         <AnimatePresence>
           {overlay && (
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="absolute inset-x-4 bottom-4 z-30"
-            >
-              <div className="bg-card/95 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    <span className="text-sm font-body font-medium text-foreground">Meal Detected</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={handleRetake}
-                      className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
-                      title="Retake"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={dismissOverlay}
-                      className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
-                      title="Confirm"
-                    >
-                      <Check className="w-3.5 h-3.5 text-primary" />
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground font-body mb-3">
-                  Estimated: ~{roundApprox(overlay.calories)} kcal · {overlay.protein}g protein
-                </p>
-                <Input
-                  value={overlayText}
-                  onChange={(e) => {
-                    setOverlayText(e.target.value);
-                    if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
-                    overlayTimerRef.current = setTimeout(dismissOverlay, 4000);
-                  }}
-                  placeholder="Add details (optional)"
-                  className="border-0 bg-secondary/80 h-9 rounded-xl font-body text-xs"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") dismissOverlay();
-                  }}
-                />
-              </div>
-            </motion.div>
+            <MealOverlay
+              meal={overlay}
+              onConfirm={handleOverlayConfirm}
+              onRetake={handleRetake}
+            />
           )}
         </AnimatePresence>
 
