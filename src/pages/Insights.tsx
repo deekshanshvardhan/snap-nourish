@@ -141,7 +141,7 @@ const Insights = () => {
             <div key={macro.label} className="bg-card rounded-2xl p-4 border border-border">
               <div className={`w-2 h-2 rounded-full ${macro.color} mb-3`} />
               <p className="text-2xl font-display text-foreground">
-                {macro.value}
+                ~{macro.value}
                 <span className="text-sm text-muted-foreground font-body">{macro.unit}</span>
               </p>
               <p className="text-xs text-muted-foreground font-body">{macro.label}</p>

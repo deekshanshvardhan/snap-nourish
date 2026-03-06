@@ -42,8 +42,8 @@ const MealCard = ({
       </div>
       <div className="text-right shrink-0 flex items-center gap-3">
         <div>
-          <p className="font-display text-lg text-foreground">{meal.calories}</p>
-          <p className="text-xs text-muted-foreground font-body">kcal</p>
+          <p className="font-display text-lg text-foreground">~{Math.round(meal.calories / 10) * 10}</p>
+          <p className="text-xs text-muted-foreground font-body">kcal est.</p>
         </div>
         {onEdit && (
           <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
