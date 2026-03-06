@@ -67,25 +67,19 @@ const Home = () => {
 
   const showOverlay = (meal: Meal) => {
     setOverlay(meal);
-    setOverlayText("");
-    if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
-    overlayTimerRef.current = setTimeout(() => dismissOverlay(), 3500);
   };
 
-  const dismissOverlay = () => {
-    setOverlay((prev) => {
-      if (prev && overlayText.trim()) {
-        const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
-        const idx = meals.findIndex((m) => m.id === prev.id);
-        if (idx !== -1) {
-          meals[idx].description = overlayText.trim();
-          localStorage.setItem("meals", JSON.stringify(meals));
-          setQuickLogKey((k) => k + 1);
-        }
+  const handleOverlayConfirm = (meal: Meal, text: string) => {
+    if (text.trim()) {
+      const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+      const idx = meals.findIndex((m) => m.id === meal.id);
+      if (idx !== -1) {
+        meals[idx].description = text.trim();
+        localStorage.setItem("meals", JSON.stringify(meals));
+        setQuickLogKey((k) => k + 1);
       }
-      return null;
-    });
-    setOverlayText("");
+    }
+    setOverlay(null);
   };
 
   const handleCapture = () => {
