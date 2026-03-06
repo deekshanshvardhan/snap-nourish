@@ -102,8 +102,8 @@ const Insights = () => {
         <div className="bg-card rounded-3xl p-8 flex items-center gap-8 shadow-sm border border-border">
           <NutritionRing value={totals.calories} max={goal} />
           <div>
-            <p className="text-4xl font-display text-foreground">{totals.calories}</p>
-            <p className="text-muted-foreground font-body text-sm">of {goal} kcal</p>
+            <p className="text-4xl font-display text-foreground">~{Math.round(totals.calories / 10) * 10}</p>
+            <p className="text-muted-foreground font-body text-sm">of ~{goal} kcal</p>
             <p className="text-xs text-muted-foreground mt-1 font-body">
               {todayMeals.length} meal{todayMeals.length !== 1 ? "s" : ""} logged
             </p>
