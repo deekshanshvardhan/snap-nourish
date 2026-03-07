@@ -157,6 +157,7 @@ const Insights = () => {
           onLogMeal={handleLogMeal}
           onQuickLog={handleQuickLog}
           pinnedMeals={pinnedMeals}
+          onMealUpdated={() => setMealsVersion((v) => v + 1)}
         />
       </div>
 

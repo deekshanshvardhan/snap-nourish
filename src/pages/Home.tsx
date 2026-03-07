@@ -79,7 +79,7 @@ const Home = () => {
   const handleCapture = () => {
     setFlash(true);
     setTimeout(() => setFlash(false), 300);
-    const meal = generateMeal("Photo meal", "photo");
+    const meal = generateMeal(getSimulatedDescription(), "photo");
     saveMeal(meal);
     showOverlay(meal);
   };
