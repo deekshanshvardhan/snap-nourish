@@ -36,16 +36,20 @@ const Home = () => {
     checkTemplates();
   }, []);
 
-  const generateMeal = (description: string, type: string): Meal => ({
-    id: Date.now(),
-    type,
-    timestamp: new Date().toISOString(),
-    description,
-    calories: Math.floor(Math.random() * 400 + 200),
-    protein: Math.floor(Math.random() * 25 + 10),
-    carbs: Math.floor(Math.random() * 50 + 20),
-    fat: Math.floor(Math.random() * 20 + 5),
-  });
+  const generateMeal = (description: string, type: string): Meal => {
+    const timestamp = new Date().toISOString();
+    return {
+      id: Date.now(),
+      type,
+      timestamp,
+      description,
+      calories: Math.floor(Math.random() * 400 + 200),
+      protein: Math.floor(Math.random() * 25 + 10),
+      carbs: Math.floor(Math.random() * 50 + 20),
+      fat: Math.floor(Math.random() * 20 + 5),
+      mealLabel: inferMealLabel(timestamp),
+    };
+  };
 
   const saveMeal = (meal: Meal) => {
     const meals = JSON.parse(localStorage.getItem("meals") || "[]");
