@@ -25,7 +25,7 @@ interface Meal {
   fat: number;
 }
 
-const roundApprox = (n: number, step = 10) => Math.round(n / step) * step;
+import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
 
 const Home = () => {
   const [showTextInput, setShowTextInput] = useState(false);
