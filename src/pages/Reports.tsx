@@ -4,8 +4,11 @@ import { FileText, Upload, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import BottomNav from "@/components/BottomNav";
+import FloatingLogButton from "@/components/FloatingLogButton";
+import { cn } from "@/lib/utils";
 
 interface Meal {
   id: number;
@@ -19,14 +22,8 @@ interface Meal {
 type Tab = "daily" | "weekly" | "monthly" | "custom";
 
 const DatePickerButton = ({
-  date,
-  onSelect,
-  label,
-}: {
-  date: Date | undefined;
-  onSelect: (d: Date | undefined) => void;
-  label: string;
-}) => (
+  date, onSelect, label,
+}: { date: Date | undefined; onSelect: (d: Date | undefined) => void; label: string }) => (
   <Popover>
     <PopoverTrigger asChild>
       <button className="flex-1 bg-secondary rounded-xl px-3 py-2.5 text-left">
@@ -37,12 +34,7 @@ const DatePickerButton = ({
       </button>
     </PopoverTrigger>
     <PopoverContent className="w-auto p-0" align="start">
-      <Calendar
-        mode="single"
-        selected={date}
-        onSelect={onSelect}
-        className="p-3 pointer-events-auto"
-      />
+      <Calendar mode="single" selected={date} onSelect={onSelect} className={cn("p-3 pointer-events-auto")} />
     </PopoverContent>
   </Popover>
 );
@@ -54,45 +46,30 @@ const Reports = () => {
   const [compareMode, setCompareMode] = useState(false);
   const [p2Start, setP2Start] = useState<Date | undefined>();
   const [p2End, setP2End] = useState<Date | undefined>();
+  const [trendRange, setTrendRange] = useState<7 | 30 | 90>(7);
 
-  const meals: Meal[] = useMemo(
-    () => JSON.parse(localStorage.getItem("meals") || "[]"),
-    []
-  );
+  const meals: Meal[] = useMemo(() => JSON.parse(localStorage.getItem("meals") || "[]"), []);
 
   const today = new Date().toDateString();
   const todayMeals = meals.filter((m) => new Date(m.timestamp).toDateString() === today);
 
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
   const weekMeals = meals.filter((m) => new Date(m.timestamp) >= weekAgo);
 
-  const monthAgo = new Date();
-  monthAgo.setDate(monthAgo.getDate() - 30);
+  const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30);
   const monthMeals = meals.filter((m) => new Date(m.timestamp) >= monthAgo);
 
   const sumMeals = (list: Meal[]) =>
     list.reduce(
-      (a, m) => ({
-        calories: a.calories + m.calories,
-        protein: a.protein + m.protein,
-        carbs: a.carbs + m.carbs,
-        fat: a.fat + m.fat,
-        count: a.count + 1,
-      }),
+      (a, m) => ({ calories: a.calories + m.calories, protein: a.protein + m.protein, carbs: a.carbs + m.carbs, fat: a.fat + m.fat, count: a.count + 1 }),
       { calories: 0, protein: 0, carbs: 0, fat: 0, count: 0 }
     );
 
   const filterByRange = (start: Date | undefined, end: Date | undefined) => {
     if (!start || !end) return [];
-    const s = new Date(start);
-    s.setHours(0, 0, 0, 0);
-    const e = new Date(end);
-    e.setHours(23, 59, 59, 999);
-    return meals.filter((m) => {
-      const d = new Date(m.timestamp);
-      return d >= s && d <= e;
-    });
+    const s = new Date(start); s.setHours(0, 0, 0, 0);
+    const e = new Date(end); e.setHours(23, 59, 59, 999);
+    return meals.filter((m) => { const d = new Date(m.timestamp); return d >= s && d <= e; });
   };
 
   const daysBetween = (start: Date | undefined, end: Date | undefined) => {
@@ -113,10 +90,9 @@ const Reports = () => {
   };
 
   const current = data[tab];
-  const hasSufficientData =
-    tab === "custom"
-      ? customStart && customEnd && current.count >= 1
-      : current.count >= (tab === "daily" ? 1 : tab === "weekly" ? 3 : 7);
+  const hasSufficientData = tab === "custom"
+    ? customStart && customEnd && current.count >= 1
+    : current.count >= (tab === "daily" ? 1 : tab === "weekly" ? 3 : 7);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "daily", label: "Daily" },
@@ -135,6 +111,28 @@ const Reports = () => {
   const p1Summary = sumMeals(customMeals);
   const p2Summary = sumMeals(p2Meals);
 
+  // Trend chart data
+  const trendData = useMemo(() => {
+    const days: { date: string; calories: number; protein: number; carbs: number; fat: number; meals: number }[] = [];
+    for (let i = trendRange - 1; i >= 0; i--) {
+      const d = subDays(new Date(), i);
+      const ds = d.toDateString();
+      const dayMeals = meals.filter((m) => new Date(m.timestamp).toDateString() === ds);
+      const sum = sumMeals(dayMeals);
+      days.push({
+        date: format(d, "MMM d"),
+        calories: sum.calories,
+        protein: sum.protein,
+        carbs: sum.carbs,
+        fat: sum.fat,
+        meals: sum.count,
+      });
+    }
+    return days;
+  }, [meals, trendRange]);
+
+  const hasTrendData = trendData.some((d) => d.meals > 0);
+
   return (
     <div className="flex flex-col min-h-screen bg-background max-w-md mx-auto pb-24">
       <div className="px-6 pt-12 pb-6">
@@ -152,9 +150,7 @@ const Reports = () => {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`flex-1 py-3 rounded-xl text-sm font-body font-medium transition-all ${
-                tab === t.key
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground"
+                tab === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
               }`}
             >
               {t.label}
@@ -163,23 +159,118 @@ const Reports = () => {
         </div>
       </div>
 
+      {/* Trend Graphs */}
+      <div className="px-6 mb-6">
+        <div className="bg-card rounded-3xl p-5 border border-border">
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-body font-medium text-foreground text-sm">Nutrition Trends</p>
+            <div className="flex gap-1">
+              {([7, 30, 90] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setTrendRange(r)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-body font-medium transition-all ${
+                    trendRange === r ? "bg-primary/10 text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {r}d
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {hasTrendData ? (
+            <div className="space-y-4">
+              {/* Calories chart */}
+              <div>
+                <p className="text-[10px] text-muted-foreground font-body mb-2">Calories / day</p>
+                <div className="h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--nutrition-calories))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--nutrition-calories))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                        labelStyle={{ color: "hsl(var(--foreground))" }}
+                      />
+                      <Area type="monotone" dataKey="calories" stroke="hsl(var(--nutrition-calories))" fill="url(#calGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Protein chart */}
+              <div>
+                <p className="text-[10px] text-muted-foreground font-body mb-2">Protein (g) / day</p>
+                <div className="h-28">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="protGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--nutrition-protein))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--nutrition-protein))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                        labelStyle={{ color: "hsl(var(--foreground))" }}
+                      />
+                      <Area type="monotone" dataKey="protein" stroke="hsl(var(--nutrition-protein))" fill="url(#protGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Logging consistency */}
+              <div>
+                <p className="text-[10px] text-muted-foreground font-body mb-2">Meals logged / day</p>
+                <div className="h-20">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="mealGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                        labelStyle={{ color: "hsl(var(--foreground))" }}
+                      />
+                      <Area type="monotone" dataKey="meals" stroke="hsl(var(--accent))" fill="url(#mealGrad)" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground font-body text-center py-6">
+              Log meals to see nutrition trends over time.
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Report content */}
-      <motion.div
-        key={tab}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="px-6"
-      >
+      <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6">
         {tab === "custom" ? (
           <div className="space-y-4">
-            {/* Date range pickers */}
             <div className="bg-card rounded-3xl p-5 border border-border space-y-4">
               <p className="font-body font-medium text-foreground text-sm">Select Date Range</p>
               <div className="flex gap-2">
                 <DatePickerButton date={customStart} onSelect={setCustomStart} label="Start" />
                 <DatePickerButton date={customEnd} onSelect={setCustomEnd} label="End" />
               </div>
-
               {hasSufficientData && (
                 <div className="space-y-3 pt-2">
                   {metrics.map((item) => (
@@ -190,9 +281,7 @@ const Reports = () => {
                       </div>
                       <span className="font-display text-lg text-foreground">
                         {Math.round(current[item.key] / customDays)}
-                        <span className="text-xs text-muted-foreground font-body ml-1">
-                          {item.unit}/day avg
-                        </span>
+                        <span className="text-xs text-muted-foreground font-body ml-1">{item.unit}/day avg</span>
                       </span>
                     </div>
                   ))}
@@ -202,39 +291,27 @@ const Reports = () => {
                   </div>
                 </div>
               )}
-
               {!hasSufficientData && customStart && customEnd && (
-                <p className="text-sm text-muted-foreground font-body text-center py-2">
-                  No meals found in this range.
-                </p>
+                <p className="text-sm text-muted-foreground font-body text-center py-2">No meals found in this range.</p>
               )}
             </div>
 
-            {/* Compare toggle */}
             <button
               onClick={() => setCompareMode(!compareMode)}
               className={`w-full py-3 rounded-2xl text-sm font-body font-medium transition-all border ${
-                compareMode
-                  ? "bg-primary/10 border-primary/30 text-primary"
-                  : "bg-card border-border text-muted-foreground"
+                compareMode ? "bg-primary/10 border-primary/30 text-primary" : "bg-card border-border text-muted-foreground"
               }`}
             >
               {compareMode ? "Hide Comparison" : "Compare Periods"}
             </button>
 
-            {/* Compare mode */}
             {compareMode && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="bg-card rounded-3xl p-5 border border-border space-y-4"
-              >
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="bg-card rounded-3xl p-5 border border-border space-y-4">
                 <p className="font-body font-medium text-foreground text-sm">Period 2</p>
                 <div className="flex gap-2">
                   <DatePickerButton date={p2Start} onSelect={setP2Start} label="Start" />
                   <DatePickerButton date={p2End} onSelect={setP2End} label="End" />
                 </div>
-
                 {p1Summary.count > 0 && p2Summary.count > 0 && p2Start && p2End && (
                   <div className="space-y-3 pt-2">
                     {metrics.map((item) => {
@@ -255,17 +332,9 @@ const Reports = () => {
                               <span>P2: {avg2}{item.unit}/day</span>
                             </div>
                             <div className={`flex items-center gap-1 text-xs font-body font-medium ${
-                              diff === 0
-                                ? "text-muted-foreground"
-                                : isPositive
-                                ? "text-primary"
-                                : "text-destructive"
+                              diff === 0 ? "text-muted-foreground" : isPositive ? "text-primary" : "text-destructive"
                             }`}>
-                              {diff !== 0 && (
-                                isPositive
-                                  ? <ArrowUpRight className="w-3 h-3" />
-                                  : <ArrowDownRight className="w-3 h-3" />
-                              )}
+                              {diff !== 0 && (isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />)}
                               {diff > 0 ? "+" : ""}{diff}{item.unit}
                             </div>
                           </div>
@@ -286,12 +355,9 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="font-body font-medium text-foreground">{current.label}</p>
-                  <p className="text-xs text-muted-foreground font-body">
-                    {current.count} meals over {current.period}
-                  </p>
+                  <p className="text-xs text-muted-foreground font-body">{current.count} meals over {current.period}</p>
                 </div>
               </div>
-
               <div className="space-y-4">
                 {metrics.map((item) => (
                   <div key={item.label} className="flex items-center justify-between">
@@ -302,8 +368,7 @@ const Reports = () => {
                     <span className="font-display text-lg text-foreground">
                       {tab !== "daily" ? Math.round(current[item.key] / (current.count || 1)) : current[item.key]}
                       <span className="text-xs text-muted-foreground font-body ml-1">
-                        {item.unit}
-                        {tab !== "daily" && "/day avg"}
+                        {item.unit}{tab !== "daily" && "/day avg"}
                       </span>
                     </span>
                   </div>
@@ -317,9 +382,7 @@ const Reports = () => {
               <FileText className="w-7 h-7 text-muted-foreground" />
             </div>
             <p className="font-body text-foreground font-medium mb-2">Not enough data</p>
-            <p className="text-sm text-muted-foreground font-body">
-              Log more meals to unlock {tab} insights.
-            </p>
+            <p className="text-sm text-muted-foreground font-body">Log more meals to unlock {tab} insights.</p>
           </div>
         )}
       </motion.div>
@@ -331,15 +394,12 @@ const Reports = () => {
             <Upload className="w-5 h-5 text-accent" />
             <p className="font-body font-medium text-foreground">Blood Report</p>
           </div>
-          <p className="text-sm text-muted-foreground font-body mb-4">
-            Upload your blood report to connect nutrition with biomarkers.
-          </p>
-          <Button variant="outline" className="rounded-xl w-full">
-            Upload Report
-          </Button>
+          <p className="text-sm text-muted-foreground font-body mb-4">Upload your blood report to connect nutrition with biomarkers.</p>
+          <Button variant="outline" className="rounded-xl w-full">Upload Report</Button>
         </div>
       </div>
 
+      <FloatingLogButton />
       <BottomNav />
     </div>
   );
