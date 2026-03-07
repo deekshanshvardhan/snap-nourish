@@ -14,16 +14,6 @@ import {
   MealTemplate,
 } from "@/lib/mealTemplates";
 
-interface Meal {
-  id: number;
-  type: string;
-  timestamp: string;
-  description: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
 
 import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
 
