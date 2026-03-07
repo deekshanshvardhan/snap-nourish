@@ -14,18 +14,8 @@ import {
   MealTemplate,
 } from "@/lib/mealTemplates";
 
-interface Meal {
-  id: number;
-  type: string;
-  timestamp: string;
-  description: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
 
-const roundApprox = (n: number, step = 10) => Math.round(n / step) * step;
+import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
 
 const Home = () => {
   const [showTextInput, setShowTextInput] = useState(false);
@@ -46,16 +36,20 @@ const Home = () => {
     checkTemplates();
   }, []);
 
-  const generateMeal = (description: string, type: string): Meal => ({
-    id: Date.now(),
-    type,
-    timestamp: new Date().toISOString(),
-    description,
-    calories: Math.floor(Math.random() * 400 + 200),
-    protein: Math.floor(Math.random() * 25 + 10),
-    carbs: Math.floor(Math.random() * 50 + 20),
-    fat: Math.floor(Math.random() * 20 + 5),
-  });
+  const generateMeal = (description: string, type: string): Meal => {
+    const timestamp = new Date().toISOString();
+    return {
+      id: Date.now(),
+      type,
+      timestamp,
+      description,
+      calories: Math.floor(Math.random() * 400 + 200),
+      protein: Math.floor(Math.random() * 25 + 10),
+      carbs: Math.floor(Math.random() * 50 + 20),
+      fat: Math.floor(Math.random() * 20 + 5),
+      mealLabel: inferMealLabel(timestamp),
+    };
+  };
 
   const saveMeal = (meal: Meal) => {
     const meals = JSON.parse(localStorage.getItem("meals") || "[]");
@@ -85,7 +79,7 @@ const Home = () => {
   const handleCapture = () => {
     setFlash(true);
     setTimeout(() => setFlash(false), 300);
-    const meal = generateMeal("Photo meal", "photo");
+    const meal = generateMeal(getSimulatedDescription(), "photo");
     saveMeal(meal);
     showOverlay(meal);
   };

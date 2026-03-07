@@ -11,16 +11,7 @@ import RecentlyLogged from "@/components/RecentlyLogged";
 import { MealTemplate, saveTemplate } from "@/lib/mealTemplates";
 import { useNavigate } from "react-router-dom";
 
-interface Meal {
-  id: number;
-  type: string;
-  timestamp: string;
-  description: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
+import { Meal } from "@/lib/mealUtils";
 
 const DATE_OPTIONS = [
   { label: "Today", offset: 0 },
@@ -166,6 +157,7 @@ const Insights = () => {
           onLogMeal={handleLogMeal}
           onQuickLog={handleQuickLog}
           pinnedMeals={pinnedMeals}
+          onMealUpdated={() => setMealsVersion((v) => v + 1)}
         />
       </div>
 
