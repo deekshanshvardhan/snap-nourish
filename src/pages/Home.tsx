@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import BottomNav from "@/components/BottomNav";
 import QuickLog from "@/components/QuickLog";
 import MealOverlay from "@/components/MealOverlay";
+import PersonalizationPrompt from "@/components/PersonalizationPrompt";
 import {
   detectTemplateCandidates,
   createTemplateFromMeal,
@@ -13,7 +14,6 @@ import {
   dismissTemplatePrompt,
   MealTemplate,
 } from "@/lib/mealTemplates";
-
 
 import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
 
@@ -23,6 +23,8 @@ const Home = () => {
   const [flash, setFlash] = useState(false);
   const [overlay, setOverlay] = useState<Meal | null>(null);
   const [quickLogKey, setQuickLogKey] = useState(0);
+  const [showHint, setShowHint] = useState(false);
+  const [showPersonalization, setShowPersonalization] = useState(false);
 
   // Template prompt state
   const [templateCandidate, setTemplateCandidate] = useState<Meal | null>(null);
@@ -34,7 +36,24 @@ const Home = () => {
 
   useEffect(() => {
     checkTemplates();
+
+    // Show first-time hint
+    if (localStorage.getItem("show-first-hint") === "true") {
+      setShowHint(true);
+      localStorage.removeItem("show-first-hint");
+      setTimeout(() => setShowHint(false), 4000);
+    }
   }, []);
+
+  // Check if personalization prompt should show after logging
+  const maybeShowPersonalization = () => {
+    if (localStorage.getItem("personalization-completed") === "true") return;
+    if (localStorage.getItem("personalization-dismissed") === "true") return;
+    const meals = JSON.parse(localStorage.getItem("meals") || "[]");
+    if (meals.length >= 2) {
+      setShowPersonalization(true);
+    }
+  };
 
   const generateMeal = (description: string, type: string): Meal => {
     const timestamp = new Date().toISOString();
@@ -57,6 +76,8 @@ const Home = () => {
     localStorage.setItem("meals", JSON.stringify(meals));
     setQuickLogKey((k) => k + 1);
     checkTemplates();
+    // Trigger personalization check after a short delay
+    setTimeout(maybeShowPersonalization, 1500);
   };
 
   const showOverlay = (meal: Meal) => {
@@ -78,6 +99,7 @@ const Home = () => {
 
   const handleCapture = () => {
     setFlash(true);
+    setShowHint(false);
     setTimeout(() => setFlash(false), 300);
     const meal = generateMeal(getSimulatedDescription(), "photo");
     saveMeal(meal);
@@ -115,7 +137,6 @@ const Home = () => {
       fat: template.fat,
     };
     saveMeal(meal);
-    // Update template count
     template.count++;
     template.lastLogged = new Date().toISOString();
     saveTemplate(template);
@@ -180,7 +201,20 @@ const Home = () => {
           <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-primary/60 rounded-bl-xl" />
           <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-primary/60 rounded-br-xl" />
           <div className="flex items-center justify-center h-full">
-            <p className="text-primary/40 font-body text-sm">Point at your meal</p>
+            <AnimatePresence>
+              {showHint ? (
+                <motion.p
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-primary/70 font-body text-sm text-center px-4"
+                >
+                  Point at your meal to log it
+                </motion.p>
+              ) : (
+                <p className="text-primary/40 font-body text-sm">Point at your meal</p>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -315,6 +349,16 @@ const Home = () => {
       </div>
 
       <BottomNav />
+
+      {/* Personalization prompt */}
+      <AnimatePresence>
+        {showPersonalization && (
+          <PersonalizationPrompt
+            onDismiss={() => setShowPersonalization(false)}
+            onSave={() => setShowPersonalization(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
