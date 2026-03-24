@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { FileText, Upload, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { FileText, Upload, ArrowUpRight, ArrowDownRight, TrendingUp, ChevronDown, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, subDays } from "date-fns";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import BottomNav from "@/components/BottomNav";
 import FloatingLogButton from "@/components/FloatingLogButton";
 import { cn } from "@/lib/utils";
@@ -40,13 +40,14 @@ const DatePickerButton = ({
 );
 
 const Reports = () => {
-  const [tab, setTab] = useState<Tab>("daily");
+  const [tab, setTab] = useState<Tab>("weekly");
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [compareMode, setCompareMode] = useState(false);
   const [p2Start, setP2Start] = useState<Date | undefined>();
   const [p2End, setP2End] = useState<Date | undefined>();
   const [trendRange, setTrendRange] = useState<7 | 30 | 90>(7);
+  const [showTrends, setShowTrends] = useState(false);
 
   const meals: Meal[] = useMemo(() => JSON.parse(localStorage.getItem("meals") || "[]"), []);
 
@@ -82,6 +83,8 @@ const Reports = () => {
   const p2Meals = filterByRange(p2Start, p2End);
   const p2Days = daysBetween(p2Start, p2End);
 
+  const periodDays = { daily: 1, weekly: 7, monthly: 30, custom: customDays };
+
   const data = {
     daily: { ...sumMeals(todayMeals), label: "Today", period: "today" },
     weekly: { ...sumMeals(weekMeals), label: "This Week", period: "7 days" },
@@ -90,9 +93,15 @@ const Reports = () => {
   };
 
   const current = data[tab];
+  const days = periodDays[tab];
+  const avgCalories = current.count > 0 ? Math.round(current.calories / days) : 0;
+  const avgProtein = current.count > 0 ? Math.round(current.protein / days) : 0;
+  const avgCarbs = current.count > 0 ? Math.round(current.carbs / days) : 0;
+  const avgFat = current.count > 0 ? Math.round(current.fat / days) : 0;
+
   const hasSufficientData = tab === "custom"
     ? customStart && customEnd && current.count >= 1
-    : current.count >= (tab === "daily" ? 1 : tab === "weekly" ? 3 : 7);
+    : current.count >= 1;
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "daily", label: "Daily" },
@@ -111,27 +120,50 @@ const Reports = () => {
   const p1Summary = sumMeals(customMeals);
   const p2Summary = sumMeals(p2Meals);
 
+  // Generate insights
+  const insights = useMemo(() => {
+    const items: string[] = [];
+    if (current.count === 0) return items;
+
+    // Protein insight
+    if (avgProtein < 50) items.push("Protein intake is below recommended levels");
+    else if (avgProtein > 100) items.push("Great protein intake — keep it up!");
+
+    // Calorie insight
+    if (avgCalories > 0 && avgCalories < 1200) items.push("Calorie intake seems low — make sure you're eating enough");
+    else if (avgCalories > 2500) items.push("Calorie intake is on the higher side");
+
+    // Logging consistency
+    const loggedDays = new Set(meals.map(m => new Date(m.timestamp).toDateString())).size;
+    const last7 = meals.filter(m => new Date(m.timestamp) >= subDays(new Date(), 7));
+    const loggedLast7 = new Set(last7.map(m => new Date(m.timestamp).toDateString())).size;
+    if (loggedLast7 >= 5) items.push("Logging consistency is strong this week");
+    else if (loggedLast7 >= 3) items.push("Logging consistency is improving — keep going");
+    else if (loggedDays > 0) items.push("Try logging meals more consistently for better insights");
+
+    return items.slice(0, 3);
+  }, [current, avgProtein, avgCalories, meals]);
+
   // Trend chart data
   const trendData = useMemo(() => {
-    const days: { date: string; calories: number; protein: number; carbs: number; fat: number; meals: number }[] = [];
+    const result: { date: string; calories: number; protein: number; carbs: number; fat: number; meals: number }[] = [];
     for (let i = trendRange - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const ds = d.toDateString();
       const dayMeals = meals.filter((m) => new Date(m.timestamp).toDateString() === ds);
       const sum = sumMeals(dayMeals);
-      days.push({
-        date: format(d, "MMM d"),
-        calories: sum.calories,
-        protein: sum.protein,
-        carbs: sum.carbs,
-        fat: sum.fat,
-        meals: sum.count,
-      });
+      result.push({ date: format(d, "MMM d"), calories: sum.calories, protein: sum.protein, carbs: sum.carbs, fat: sum.fat, meals: sum.count });
     }
-    return days;
+    return result;
   }, [meals, trendRange]);
 
   const hasTrendData = trendData.some((d) => d.meals > 0);
+
+  const chartConfigs = [
+    { key: "calories" as const, label: "Calories / day", gradId: "calGrad", color: "hsl(var(--nutrition-calories))", height: "h-32" },
+    { key: "protein" as const, label: "Protein (g) / day", gradId: "protGrad", color: "hsl(var(--nutrition-protein))", height: "h-28" },
+    { key: "meals" as const, label: "Meals logged / day", gradId: "mealGrad", color: "hsl(var(--accent))", height: "h-20" },
+  ];
 
   return (
     <div className="flex flex-col min-h-screen bg-background max-w-md mx-auto pb-24">
@@ -159,221 +191,58 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* Trend Graphs */}
-      <div className="px-6 mb-6">
-        <div className="bg-card rounded-3xl p-5 border border-border">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-body font-medium text-foreground text-sm">Nutrition Trends</p>
-            <div className="flex gap-1">
-              {([7, 30, 90] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setTrendRange(r)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-body font-medium transition-all ${
-                    trendRange === r ? "bg-primary/10 text-primary" : "text-muted-foreground"
-                  }`}
-                >
-                  {r}d
-                </button>
-              ))}
+      {/* Custom date range picker */}
+      {tab === "custom" && (
+        <div className="px-6 mb-4">
+          <div className="bg-card rounded-3xl p-5 border border-border space-y-4">
+            <p className="font-body font-medium text-foreground text-sm">Select Date Range</p>
+            <div className="flex gap-2">
+              <DatePickerButton date={customStart} onSelect={setCustomStart} label="Start" />
+              <DatePickerButton date={customEnd} onSelect={setCustomEnd} label="End" />
             </div>
           </div>
-
-          {hasTrendData ? (
-            <div className="space-y-4">
-              {/* Calories chart */}
-              <div>
-                <p className="text-[10px] text-muted-foreground font-body mb-2">Calories / day</p>
-                <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--nutrition-calories))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--nutrition-calories))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis hide />
-                      <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                        labelStyle={{ color: "hsl(var(--foreground))" }}
-                      />
-                      <Area type="monotone" dataKey="calories" stroke="hsl(var(--nutrition-calories))" fill="url(#calGrad)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Protein chart */}
-              <div>
-                <p className="text-[10px] text-muted-foreground font-body mb-2">Protein (g) / day</p>
-                <div className="h-28">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="protGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--nutrition-protein))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--nutrition-protein))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis hide />
-                      <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                        labelStyle={{ color: "hsl(var(--foreground))" }}
-                      />
-                      <Area type="monotone" dataKey="protein" stroke="hsl(var(--nutrition-protein))" fill="url(#protGrad)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Logging consistency */}
-              <div>
-                <p className="text-[10px] text-muted-foreground font-body mb-2">Meals logged / day</p>
-                <div className="h-20">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="mealGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis hide />
-                      <Tooltip
-                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                        labelStyle={{ color: "hsl(var(--foreground))" }}
-                      />
-                      <Area type="monotone" dataKey="meals" stroke="hsl(var(--accent))" fill="url(#mealGrad)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground font-body text-center py-6">
-              Log meals to see nutrition trends over time.
-            </p>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Report content */}
-      <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6">
-        {tab === "custom" ? (
-          <div className="space-y-4">
-            <div className="bg-card rounded-3xl p-5 border border-border space-y-4">
-              <p className="font-body font-medium text-foreground text-sm">Select Date Range</p>
-              <div className="flex gap-2">
-                <DatePickerButton date={customStart} onSelect={setCustomStart} label="Start" />
-                <DatePickerButton date={customEnd} onSelect={setCustomEnd} label="End" />
+      {/* Summary Card */}
+      <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6 mb-4">
+        {hasSufficientData ? (
+          <div className="bg-card rounded-3xl p-6 border border-border">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-primary" />
               </div>
-              {hasSufficientData && (
-                <div className="space-y-3 pt-2">
-                  {metrics.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                        <span className="font-body text-sm text-foreground">{item.label}</span>
-                      </div>
-                      <span className="font-display text-lg text-foreground">
-                        {Math.round(current[item.key] / customDays)}
-                        <span className="text-xs text-muted-foreground font-body ml-1">{item.unit}/day avg</span>
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
-                    <span className="font-body text-sm text-muted-foreground">Total meals</span>
-                    <span className="font-display text-lg text-foreground">{current.count}</span>
-                  </div>
-                </div>
-              )}
-              {!hasSufficientData && customStart && customEnd && (
-                <p className="text-sm text-muted-foreground font-body text-center py-2">No meals found in this range.</p>
-              )}
+              <div>
+                <p className="font-body font-medium text-foreground">{current.label}</p>
+                <p className="text-xs text-muted-foreground font-body">{current.count} meals · {current.period}</p>
+              </div>
             </div>
 
-            <button
-              onClick={() => setCompareMode(!compareMode)}
-              className={`w-full py-3 rounded-2xl text-sm font-body font-medium transition-all border ${
-                compareMode ? "bg-primary/10 border-primary/30 text-primary" : "bg-card border-border text-muted-foreground"
-              }`}
-            >
-              {compareMode ? "Hide Comparison" : "Compare Periods"}
-            </button>
-
-            {compareMode && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="bg-card rounded-3xl p-5 border border-border space-y-4">
-                <p className="font-body font-medium text-foreground text-sm">Period 2</p>
-                <div className="flex gap-2">
-                  <DatePickerButton date={p2Start} onSelect={setP2Start} label="Start" />
-                  <DatePickerButton date={p2End} onSelect={setP2End} label="End" />
-                </div>
-                {p1Summary.count > 0 && p2Summary.count > 0 && p2Start && p2End && (
-                  <div className="space-y-3 pt-2">
-                    {metrics.map((item) => {
-                      const avg1 = Math.round(p1Summary[item.key] / customDays);
-                      const avg2 = Math.round(p2Summary[item.key] / p2Days);
-                      const diff = avg2 - avg1;
-                      const isPositive = diff > 0;
-                      return (
-                        <div key={item.label} className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                            <span className="font-body text-sm text-foreground">{item.label}</span>
-                          </div>
-                          <div className="flex items-center justify-between pl-4">
-                            <div className="text-xs text-muted-foreground font-body">
-                              <span>P1: {avg1}{item.unit}/day</span>
-                              <span className="mx-2">→</span>
-                              <span>P2: {avg2}{item.unit}/day</span>
-                            </div>
-                            <div className={`flex items-center gap-1 text-xs font-body font-medium ${
-                              diff === 0 ? "text-muted-foreground" : isPositive ? "text-primary" : "text-destructive"
-                            }`}>
-                              {diff !== 0 && (isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />)}
-                              {diff > 0 ? "+" : ""}{diff}{item.unit}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </div>
-        ) : hasSufficientData ? (
-          <div className="space-y-4">
-            <div className="bg-card rounded-3xl p-6 border border-border">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-body font-medium text-foreground">{current.label}</p>
-                  <p className="text-xs text-muted-foreground font-body">{current.count} meals over {current.period}</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {metrics.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                      <span className="font-body text-sm text-foreground">{item.label}</span>
+            {/* Average metrics grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {metrics.map((item) => {
+                const avg = tab === "daily" ? current[item.key] : Math.round(current[item.key] / days);
+                return (
+                  <div key={item.label} className="bg-secondary/50 rounded-2xl p-3.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                      <span className="text-[11px] text-muted-foreground font-body">{item.label}</span>
                     </div>
-                    <span className="font-display text-lg text-foreground">
-                      {tab !== "daily" ? Math.round(current[item.key] / (current.count || 1)) : current[item.key]}
-                      <span className="text-xs text-muted-foreground font-body ml-1">
-                        {item.unit}{tab !== "daily" && "/day avg"}
-                      </span>
-                    </span>
+                    <p className="font-display text-xl text-foreground">
+                      {avg}
+                      <span className="text-xs text-muted-foreground font-body ml-1">{item.unit}</span>
+                    </p>
+                    {tab !== "daily" && (
+                      <p className="text-[10px] text-muted-foreground font-body mt-0.5">per day avg</p>
+                    )}
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+              <span className="font-body text-sm text-muted-foreground">Meals logged</span>
+              <span className="font-display text-lg text-foreground">{current.count}</span>
             </div>
           </div>
         ) : (
@@ -382,13 +251,170 @@ const Reports = () => {
               <FileText className="w-7 h-7 text-muted-foreground" />
             </div>
             <p className="font-body text-foreground font-medium mb-2">Not enough data</p>
-            <p className="text-sm text-muted-foreground font-body">Log more meals to unlock {tab} insights.</p>
+            <p className="text-sm text-muted-foreground font-body">
+              {tab === "custom" && (!customStart || !customEnd)
+                ? "Select a date range above to view your report."
+                : "Log more meals to unlock insights."}
+            </p>
           </div>
         )}
       </motion.div>
 
+      {/* Insights */}
+      {hasSufficientData && insights.length > 0 && (
+        <div className="px-6 mb-4">
+          <div className="bg-card rounded-3xl p-5 border border-border space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Lightbulb className="w-4 h-4 text-primary" />
+              <p className="font-body font-medium text-foreground text-sm">Insights</p>
+            </div>
+            {insights.map((insight, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                <p className="text-sm text-muted-foreground font-body leading-snug">{insight}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* View Trends toggle */}
+      <div className="px-6 mb-4">
+        <button
+          onClick={() => setShowTrends(!showTrends)}
+          className={`w-full flex items-center justify-between py-3.5 px-5 rounded-2xl text-sm font-body font-medium transition-all border ${
+            showTrends ? "bg-primary/10 border-primary/30 text-primary" : "bg-card border-border text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <TrendingUp className="w-4 h-4" />
+            <span>View Trends</span>
+          </div>
+          <ChevronDown className={`w-4 h-4 transition-transform ${showTrends ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {/* Trend Graphs (on demand) */}
+      <AnimatePresence>
+        {showTrends && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-6 mb-4 overflow-hidden"
+          >
+            <div className="bg-card rounded-3xl p-5 border border-border">
+              <div className="flex items-center justify-between mb-4">
+                <p className="font-body font-medium text-foreground text-sm">Nutrition Trends</p>
+                <div className="flex gap-1">
+                  {([7, 30, 90] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setTrendRange(r)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-body font-medium transition-all ${
+                        trendRange === r ? "bg-primary/10 text-primary" : "text-muted-foreground"
+                      }`}
+                    >
+                      {r}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {hasTrendData ? (
+                <div className="space-y-4">
+                  {chartConfigs.map((cfg) => (
+                    <div key={cfg.key}>
+                      <p className="text-[10px] text-muted-foreground font-body mb-2">{cfg.label}</p>
+                      <div className={cfg.height}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={trendData}>
+                            <defs>
+                              <linearGradient id={cfg.gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={cfg.color} stopOpacity={0.3} />
+                                <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                            <YAxis hide />
+                            <Tooltip
+                              contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                              labelStyle={{ color: "hsl(var(--foreground))" }}
+                            />
+                            <Area type="monotone" dataKey={cfg.key} stroke={cfg.color} fill={`url(#${cfg.gradId})`} strokeWidth={2} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground font-body text-center py-6">
+                  Log meals to see nutrition trends over time.
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Compare Periods (custom tab) */}
+      {tab === "custom" && hasSufficientData && (
+        <div className="px-6 mb-4 space-y-4">
+          <button
+            onClick={() => setCompareMode(!compareMode)}
+            className={`w-full py-3 rounded-2xl text-sm font-body font-medium transition-all border ${
+              compareMode ? "bg-primary/10 border-primary/30 text-primary" : "bg-card border-border text-muted-foreground"
+            }`}
+          >
+            {compareMode ? "Hide Comparison" : "Compare Periods"}
+          </button>
+
+          {compareMode && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="bg-card rounded-3xl p-5 border border-border space-y-4">
+              <p className="font-body font-medium text-foreground text-sm">Period 2</p>
+              <div className="flex gap-2">
+                <DatePickerButton date={p2Start} onSelect={setP2Start} label="Start" />
+                <DatePickerButton date={p2End} onSelect={setP2End} label="End" />
+              </div>
+              {p1Summary.count > 0 && p2Summary.count > 0 && p2Start && p2End && (
+                <div className="space-y-3 pt-2">
+                  {metrics.map((item) => {
+                    const avg1 = Math.round(p1Summary[item.key] / customDays);
+                    const avg2 = Math.round(p2Summary[item.key] / p2Days);
+                    const diff = avg2 - avg1;
+                    const isPositive = diff > 0;
+                    return (
+                      <div key={item.label} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                          <span className="font-body text-sm text-foreground">{item.label}</span>
+                        </div>
+                        <div className="flex items-center justify-between pl-4">
+                          <div className="text-xs text-muted-foreground font-body">
+                            <span>P1: {avg1}{item.unit}/day</span>
+                            <span className="mx-2">→</span>
+                            <span>P2: {avg2}{item.unit}/day</span>
+                          </div>
+                          <div className={`flex items-center gap-1 text-xs font-body font-medium ${
+                            diff === 0 ? "text-muted-foreground" : isPositive ? "text-primary" : "text-destructive"
+                          }`}>
+                            {diff !== 0 && (isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />)}
+                            {diff > 0 ? "+" : ""}{diff}{item.unit}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </div>
+      )}
+
       {/* Blood report upload */}
-      <div className="px-6 mt-8">
+      <div className="px-6 mt-4">
         <div className="bg-card rounded-3xl p-6 border border-border">
           <div className="flex items-center gap-3 mb-3">
             <Upload className="w-5 h-5 text-accent" />
