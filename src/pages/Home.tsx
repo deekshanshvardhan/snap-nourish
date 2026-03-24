@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Image, Type, X, Send } from "lucide-react";
+import { Camera, Image, Type, X, Send, Sparkles, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BottomNav from "@/components/BottomNav";
@@ -14,7 +14,6 @@ import {
   dismissTemplatePrompt,
   MealTemplate,
 } from "@/lib/mealTemplates";
-
 import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
 
 const Home = () => {
@@ -25,10 +24,13 @@ const Home = () => {
   const [quickLogKey, setQuickLogKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const [showPersonalization, setShowPersonalization] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
 
-  // Template prompt state
   const [templateCandidate, setTemplateCandidate] = useState<Meal | null>(null);
   const [templateName, setTemplateName] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const templateInputRef = useRef<HTMLInputElement>(null);
 
   const checkTemplates = () => {
     setTemplateCandidate(detectTemplateCandidates());
@@ -36,8 +38,6 @@ const Home = () => {
 
   useEffect(() => {
     checkTemplates();
-
-    // Show first-time hint
     if (localStorage.getItem("show-first-hint") === "true") {
       setShowHint(true);
       localStorage.removeItem("show-first-hint");
@@ -45,14 +45,11 @@ const Home = () => {
     }
   }, []);
 
-  // Check if personalization prompt should show after logging
   const maybeShowPersonalization = () => {
     if (localStorage.getItem("personalization-completed") === "true") return;
     if (localStorage.getItem("personalization-dismissed") === "true") return;
     const meals = JSON.parse(localStorage.getItem("meals") || "[]");
-    if (meals.length >= 1) {
-      setShowPersonalization(true);
-    }
+    if (meals.length >= 1) setShowPersonalization(true);
   };
 
   const generateMeal = (description: string, type: string): Meal => {
@@ -76,13 +73,10 @@ const Home = () => {
     localStorage.setItem("meals", JSON.stringify(meals));
     setQuickLogKey((k) => k + 1);
     checkTemplates();
-    // Trigger personalization check after a short delay
     setTimeout(maybeShowPersonalization, 1500);
   };
 
-  const showOverlay = (meal: Meal) => {
-    setOverlay(meal);
-  };
+  const showOverlay = (meal: Meal) => setOverlay(meal);
 
   const handleOverlayConfirm = (meal: Meal, text: string) => {
     if (text.trim()) {
@@ -100,7 +94,7 @@ const Home = () => {
   const handleCapture = () => {
     setFlash(true);
     setShowHint(false);
-    setTimeout(() => setFlash(false), 300);
+    setTimeout(() => setFlash(false), 150);
     const meal = generateMeal(getSimulatedDescription(), "photo");
     saveMeal(meal);
     showOverlay(meal);
@@ -163,9 +157,13 @@ const Home = () => {
     const name = templateName.trim() || templateCandidate.description;
     const tpl = createTemplateFromMeal(templateCandidate, name);
     saveTemplate(tpl);
-    setTemplateCandidate(null);
-    setTemplateName("");
-    setQuickLogKey((k) => k + 1);
+    setTemplateSaved(true);
+    setTimeout(() => {
+      setTemplateCandidate(null);
+      setTemplateName("");
+      setTemplateSaved(false);
+      setQuickLogKey((k) => k + 1);
+    }, 1200);
   };
 
   const handleDismissTemplate = () => {
@@ -173,6 +171,16 @@ const Home = () => {
     dismissTemplatePrompt(templateCandidate.description);
     setTemplateCandidate(null);
     setTemplateName("");
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const meal = generateMeal(getSimulatedDescription(), "photo");
+      saveMeal(meal);
+      showOverlay(meal);
+    }
+    e.target.value = "";
   };
 
   return (
@@ -185,21 +193,33 @@ const Home = () => {
         <AnimatePresence>
           {flash && (
             <motion.div
-              initial={{ opacity: 1 }}
-              animate={{ opacity: 0 }}
+              initial={{ opacity: 1, scale: 1 }}
+              animate={{ opacity: 0, scale: 1.03 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.15 }}
               className="absolute inset-0 bg-background z-50"
             />
           )}
         </AnimatePresence>
 
         {/* Viewfinder */}
-        <div className="relative z-10 w-64 h-64">
-          <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-primary/60 rounded-tl-xl" />
-          <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-primary/60 rounded-tr-xl" />
-          <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-primary/60 rounded-bl-xl" />
-          <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-primary/60 rounded-br-xl" />
+        <div className="relative z-10 w-64 h-64 animate-breathe">
+          {/* Corner brackets - thicker */}
+          <div className="absolute top-0 left-0 w-12 h-12 border-t-[3px] border-l-[3px] border-primary/60 rounded-tl-xl" />
+          <div className="absolute top-0 right-0 w-12 h-12 border-t-[3px] border-r-[3px] border-primary/60 rounded-tr-xl" />
+          <div className="absolute bottom-0 left-0 w-12 h-12 border-b-[3px] border-l-[3px] border-primary/60 rounded-bl-xl" />
+          <div className="absolute bottom-0 right-0 w-12 h-12 border-b-[3px] border-r-[3px] border-primary/60 rounded-br-xl" />
+
+          {/* Scanning line */}
+          <div className="absolute inset-4 overflow-hidden">
+            <div
+              className="absolute left-0 right-0 h-[1px] animate-scan-line"
+              style={{
+                background: "linear-gradient(90deg, transparent, hsl(var(--primary) / 0.5), transparent)",
+              }}
+            />
+          </div>
+
           <div className="flex items-center justify-center h-full">
             <AnimatePresence>
               {showHint ? (
@@ -218,7 +238,7 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Post-capture overlay */}
+        {/* Meal overlay */}
         <AnimatePresence>
           {overlay && (
             <MealOverlay
@@ -232,34 +252,50 @@ const Home = () => {
         {/* Text input overlay */}
         <AnimatePresence>
           {showTextInput && !overlay && (
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 50 }}
-              className="absolute bottom-4 left-4 right-4 z-20"
-            >
-              <div className="bg-card rounded-2xl p-3 flex gap-2 items-center shadow-lg">
-                <Input
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="e.g. 2 eggs + toast"
-                  className="border-0 bg-secondary h-12 rounded-xl font-body"
-                  onKeyDown={(e) => e.key === "Enter" && handleTextLog()}
-                  autoFocus
-                />
-                <Button size="icon" className="h-12 w-12 rounded-xl shrink-0" onClick={handleTextLog}>
-                  <Send className="w-5 h-5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-12 w-12 rounded-xl shrink-0 text-muted-foreground"
-                  onClick={() => setShowTextInput(false)}
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-            </motion.div>
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-foreground/40 z-15"
+              />
+              <motion.div
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 50 }}
+                className="absolute bottom-4 left-4 right-4 z-20"
+              >
+                <div className="bg-card rounded-2xl p-3 shadow-lg">
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      placeholder="e.g. 2 eggs + toast"
+                      className="border-0 bg-secondary h-12 rounded-xl font-body"
+                      onKeyDown={(e) => e.key === "Enter" && handleTextLog()}
+                      autoFocus
+                    />
+                    <Button size="icon" className="h-12 w-12 rounded-xl shrink-0" onClick={handleTextLog} aria-label="Send">
+                      <Send className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-12 w-12 rounded-xl shrink-0 text-muted-foreground"
+                      onClick={() => setShowTextInput(false)}
+                      aria-label="Close text input"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </div>
+                  {!textInput && (
+                    <p className="text-[11px] text-muted-foreground/40 font-body mt-2 ml-1">
+                      Try: &quot;2 eggs, toast, coffee&quot;
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
 
@@ -272,50 +308,72 @@ const Home = () => {
               exit={{ opacity: 0, y: -20 }}
               className="absolute inset-x-4 bottom-4 z-20"
             >
-              <div className="bg-card/95 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-border">
-                <p className="text-sm font-body font-medium text-foreground mb-1">
-                  Save this as a meal?
-                </p>
-                <p className="text-xs text-muted-foreground font-body mb-3">
-                  You've logged "{templateCandidate.description}" multiple times.
-                </p>
-                <Input
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder={templateCandidate.description}
-                  className="border-0 bg-secondary/80 h-9 rounded-xl font-body text-xs mb-3"
-                  onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1 rounded-xl text-xs"
-                    onClick={handleSaveTemplate}
+              {templateSaved ? (
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="bg-card/95 backdrop-blur-md rounded-2xl p-5 shadow-lg border border-primary/20 flex flex-col items-center gap-2"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 12 }}
+                    className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center"
                   >
-                    Save Meal
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="rounded-xl text-xs text-muted-foreground"
-                    onClick={handleDismissTemplate}
-                  >
-                    Dismiss
-                  </Button>
+                    <Check className="w-6 h-6 text-primary" />
+                  </motion.div>
+                  <p className="text-sm font-body font-medium text-foreground">Meal saved!</p>
+                </motion.div>
+              ) : (
+                <div className="bg-card/95 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-4 h-4 text-accent" />
+                    <p className="text-sm font-body font-medium text-foreground">
+                      Save as a quick meal?
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-body mb-3">
+                    You&apos;ve logged &quot;{templateCandidate.description}&quot; multiple times.
+                  </p>
+                  <Input
+                    ref={templateInputRef}
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder={templateCandidate.description}
+                    className="border-0 bg-secondary/80 h-9 rounded-xl font-body text-xs mb-3"
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveTemplate()}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1 rounded-xl text-xs" onClick={handleSaveTemplate}>
+                      Save Meal
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-xl text-xs text-muted-foreground"
+                      onClick={handleDismissTemplate}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Gradient fade at bottom of viewfinder */}
+        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-foreground to-transparent pointer-events-none z-5" />
       </div>
 
       {/* Camera controls */}
-      <div className="bg-foreground/95 backdrop-blur-sm pb-24 pt-6 px-6 relative z-10">
-        {/* Action buttons */}
+      <div className="bg-foreground/95 backdrop-blur-sm pb-28 pt-6 px-6 relative z-10">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => setShowTextInput(!showTextInput)}
             className="flex flex-col items-center gap-1"
+            aria-label="Add text"
           >
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Type className="w-5 h-5 text-primary" />
@@ -323,26 +381,40 @@ const Home = () => {
             <span className="text-[10px] text-primary/60 font-body">Add Text</span>
           </button>
 
+          {/* Camera button with ring pulse */}
           <button
             type="button"
             data-testid="camera-capture"
             onClick={handleCapture}
-            className="w-[92px] h-[92px] rounded-full border-4 border-primary flex items-center justify-center active:scale-95 transition-transform"
+            className="relative w-[92px] h-[92px] rounded-full border-4 border-primary flex items-center justify-center active:scale-95 transition-transform"
+            aria-label="Capture photo"
           >
+            <span className="absolute inset-[-4px] rounded-full border-2 border-primary/30 animate-ring-pulse" />
             <div className="w-[76px] h-[76px] rounded-full bg-primary flex items-center justify-center">
               <Camera className="w-9 h-9 text-primary-foreground" />
             </div>
           </button>
 
-          <button className="flex flex-col items-center gap-1">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          {/* Gallery button with file input */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center gap-1"
+            aria-label="Open gallery"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
               <Image className="w-5 h-5 text-primary" />
             </div>
             <span className="text-[10px] text-primary/60 font-body">Gallery</span>
           </button>
         </div>
 
-        {/* Quick Log */}
         <QuickLog
           onLogTemplate={handleLogTemplate}
           onLogMeal={handleLogFromHistory}
@@ -352,7 +424,6 @@ const Home = () => {
 
       <BottomNav />
 
-      {/* Personalization prompt */}
       <AnimatePresence>
         {showPersonalization && (
           <PersonalizationPrompt

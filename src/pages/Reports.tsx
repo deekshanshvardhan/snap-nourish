@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Upload, ArrowUpRight, ArrowDownRight, TrendingUp, ChevronDown, Lightbulb } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FileText, Upload, ArrowUpRight, ArrowDownRight, TrendingUp, ChevronDown, Lightbulb, Flame, Droplet } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, subDays } from "date-fns";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import BottomNav from "@/components/BottomNav";
 import FloatingLogButton from "@/components/FloatingLogButton";
+import AnimatedNumber from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
 
 interface Meal {
@@ -38,6 +38,34 @@ const DatePickerButton = ({
     </PopoverContent>
   </Popover>
 );
+
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-foreground text-background rounded-xl px-3 py-2 shadow-xl text-xs font-body">
+      <p className="font-medium mb-0.5">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} className="opacity-80">
+          {p.value} {p.dataKey === "calories" ? "kcal" : p.dataKey === "meals" ? "meals" : "g"}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+const metricIcons: Record<string, React.ReactNode> = {
+  calories: <Flame className="w-3 h-3" />,
+  protein: <span className="text-[10px] font-bold">P</span>,
+  carbs: <span className="text-[10px] font-bold">C</span>,
+  fat: <Droplet className="w-3 h-3" />,
+};
+
+const metricGradients: Record<string, string> = {
+  calories: "from-nutrition-calories/5 to-transparent",
+  protein: "from-nutrition-protein/5 to-transparent",
+  carbs: "from-nutrition-carbs/5 to-transparent",
+  fat: "from-nutrition-fat/5 to-transparent",
+};
 
 const Reports = () => {
   const [tab, setTab] = useState<Tab>("weekly");
@@ -111,40 +139,50 @@ const Reports = () => {
   ];
 
   const metrics = [
-    { label: "Calories", key: "calories" as const, unit: "kcal", color: "bg-nutrition-calories" },
-    { label: "Protein", key: "protein" as const, unit: "g", color: "bg-nutrition-protein" },
-    { label: "Carbs", key: "carbs" as const, unit: "g", color: "bg-nutrition-carbs" },
-    { label: "Fat", key: "fat" as const, unit: "g", color: "bg-nutrition-fat" },
+    { label: "Calories", key: "calories" as const, unit: "kcal", color: "bg-nutrition-calories", textColor: "text-nutrition-calories" },
+    { label: "Protein", key: "protein" as const, unit: "g", color: "bg-nutrition-protein", textColor: "text-nutrition-protein" },
+    { label: "Carbs", key: "carbs" as const, unit: "g", color: "bg-nutrition-carbs", textColor: "text-nutrition-carbs" },
+    { label: "Fat", key: "fat" as const, unit: "g", color: "bg-nutrition-fat", textColor: "text-nutrition-fat" },
   ];
+
+  const avgValues: Record<string, number> = { calories: avgCalories, protein: avgProtein, carbs: avgCarbs, fat: avgFat };
 
   const p1Summary = sumMeals(customMeals);
   const p2Summary = sumMeals(p2Meals);
 
-  // Generate insights
+  const userGoal = useMemo(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem("nutrition-profile") || "{}");
+      return profile.goal || "maintain";
+    } catch { return "maintain"; }
+  }, []);
+
+  const getComparisonColor = (key: string, diff: number): string => {
+    if (diff === 0) return "text-muted-foreground";
+    if (key === "protein") return diff > 0 ? "text-primary" : "text-destructive";
+    if (key === "calories") {
+      if (userGoal === "lose") return diff < 0 ? "text-primary" : "text-destructive";
+      if (userGoal === "gain") return diff > 0 ? "text-primary" : "text-destructive";
+      return "text-muted-foreground";
+    }
+    return "text-muted-foreground";
+  };
+
   const insights = useMemo(() => {
     const items: string[] = [];
     if (current.count === 0) return items;
-
-    // Protein insight
     if (avgProtein < 50) items.push("Protein intake is below recommended levels");
     else if (avgProtein > 100) items.push("Great protein intake — keep it up!");
-
-    // Calorie insight
     if (avgCalories > 0 && avgCalories < 1200) items.push("Calorie intake seems low — make sure you're eating enough");
     else if (avgCalories > 2500) items.push("Calorie intake is on the higher side");
-
-    // Logging consistency
-    const loggedDays = new Set(meals.map(m => new Date(m.timestamp).toDateString())).size;
     const last7 = meals.filter(m => new Date(m.timestamp) >= subDays(new Date(), 7));
     const loggedLast7 = new Set(last7.map(m => new Date(m.timestamp).toDateString())).size;
     if (loggedLast7 >= 5) items.push("Logging consistency is strong this week");
     else if (loggedLast7 >= 3) items.push("Logging consistency is improving — keep going");
-    else if (loggedDays > 0) items.push("Try logging meals more consistently for better insights");
-
+    else if (meals.length > 0) items.push("Try logging meals more consistently for better insights");
     return items.slice(0, 3);
   }, [current, avgProtein, avgCalories, meals]);
 
-  // Trend chart data
   const trendData = useMemo(() => {
     const result: { date: string; calories: number; protein: number; carbs: number; fat: number; meals: number }[] = [];
     for (let i = trendRange - 1; i >= 0; i--) {
@@ -166,26 +204,33 @@ const Reports = () => {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-background max-w-md mx-auto pb-24">
-      <div className="px-6 pt-12 pb-6">
+    <div className="flex flex-col min-h-screen bg-background max-w-md mx-auto pb-24 scrollbar-hide">
+      <div className="px-6 pt-12 pb-6 safe-top">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <p className="text-muted-foreground font-body text-sm mb-1">Reports</p>
           <h1 className="text-3xl text-foreground">Nutrition Reports</h1>
         </motion.div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs with sliding pill */}
       <div className="px-6 mb-6">
         <div className="bg-secondary rounded-2xl p-1 flex">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 rounded-xl text-sm font-body font-medium transition-all ${
-                tab === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-              }`}
+              className="flex-1 py-3 rounded-xl text-sm font-body font-medium relative z-10 transition-colors"
             >
-              {t.label}
+              {tab === t.key && (
+                <motion.div
+                  layoutId="report-tab-pill"
+                  className="absolute inset-0 bg-card rounded-xl shadow-sm"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              <span className={`relative z-10 ${tab === t.key ? "text-foreground" : "text-muted-foreground"}`}>
+                {t.label}
+              </span>
             </button>
           ))}
         </div>
@@ -207,7 +252,7 @@ const Reports = () => {
       {/* Summary Card */}
       <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-6 mb-4">
         {hasSufficientData ? (
-          <div className="bg-card rounded-3xl p-6 border border-border">
+          <div className="bg-card rounded-3xl p-6 border border-border hover:shadow-sm transition-shadow">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <FileText className="w-5 h-5 text-primary" />
@@ -218,18 +263,19 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Average metrics grid */}
             <div className="grid grid-cols-2 gap-3">
               {metrics.map((item) => {
                 const avg = tab === "daily" ? current[item.key] : Math.round(current[item.key] / days);
                 return (
-                  <div key={item.label} className="bg-secondary/50 rounded-2xl p-3.5">
+                  <div key={item.label} className={`bg-gradient-to-br ${metricGradients[item.key]} rounded-2xl p-3.5`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                      <div className={`w-5 h-5 rounded-full ${item.color} flex items-center justify-center text-white`}>
+                        {metricIcons[item.key]}
+                      </div>
                       <span className="text-[11px] text-muted-foreground font-body">{item.label}</span>
                     </div>
                     <p className="font-display text-xl text-foreground">
-                      {avg}
+                      <AnimatedNumber value={avg} />
                       <span className="text-xs text-muted-foreground font-body ml-1">{item.unit}</span>
                     </p>
                     {tab !== "daily" && (
@@ -247,8 +293,12 @@ const Reports = () => {
           </div>
         ) : (
           <div className="bg-card rounded-3xl p-8 text-center border border-border">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-7 h-7 text-muted-foreground" />
+            <div className="flex justify-center mb-4">
+              <svg viewBox="0 0 64 64" className="w-16 h-16 text-muted-foreground/20">
+                <rect x="8" y="8" width="48" height="48" rx="8" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+                <path d="M20 40 L28 28 L36 36 L44 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="24" cy="22" r="3" fill="currentColor" opacity="0.3" />
+              </svg>
             </div>
             <p className="font-body text-foreground font-medium mb-2">Not enough data</p>
             <p className="text-sm text-muted-foreground font-body">
@@ -294,7 +344,7 @@ const Reports = () => {
         </button>
       </div>
 
-      {/* Trend Graphs (on demand) */}
+      {/* Trend Graphs */}
       <AnimatePresence>
         {showTrends && (
           <motion.div
@@ -306,16 +356,24 @@ const Reports = () => {
             <div className="bg-card rounded-3xl p-5 border border-border">
               <div className="flex items-center justify-between mb-4">
                 <p className="font-body font-medium text-foreground text-sm">Nutrition Trends</p>
-                <div className="flex gap-1">
+                {/* Trend range with sliding pill */}
+                <div className="flex gap-0.5 bg-muted/50 rounded-lg p-0.5">
                   {([7, 30, 90] as const).map((r) => (
                     <button
                       key={r}
                       onClick={() => setTrendRange(r)}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-body font-medium transition-all ${
-                        trendRange === r ? "bg-primary/10 text-primary" : "text-muted-foreground"
-                      }`}
+                      className="relative px-2.5 py-1 rounded-md text-[10px] font-body font-medium"
                     >
-                      {r}d
+                      {trendRange === r && (
+                        <motion.div
+                          layoutId="trend-range-pill"
+                          className="absolute inset-0 bg-card rounded-md shadow-sm"
+                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                        />
+                      )}
+                      <span className={`relative z-10 ${trendRange === r ? "text-primary" : "text-muted-foreground"}`}>
+                        {r}d
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -326,7 +384,7 @@ const Reports = () => {
                   {chartConfigs.map((cfg) => (
                     <div key={cfg.key}>
                       <p className="text-[10px] text-muted-foreground font-body mb-2">{cfg.label}</p>
-                      <div className={cfg.height}>
+                      <div className={cfg.height} style={{ filter: "drop-shadow(0 2px 8px hsl(var(--primary) / 0.08))" }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <AreaChart data={trendData}>
                             <defs>
@@ -337,11 +395,16 @@ const Reports = () => {
                             </defs>
                             <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                             <YAxis hide />
-                            <Tooltip
-                              contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
-                              labelStyle={{ color: "hsl(var(--foreground))" }}
+                            <Tooltip content={<ChartTooltip />} />
+                            <Area
+                              type="monotone"
+                              dataKey={cfg.key}
+                              stroke={cfg.color}
+                              fill={`url(#${cfg.gradId})`}
+                              strokeWidth={2}
+                              dot={{ r: 2.5, fill: cfg.color, strokeWidth: 0 }}
+                              activeDot={{ r: 4, fill: cfg.color, strokeWidth: 2, stroke: "hsl(var(--card))" }}
                             />
-                            <Area type="monotone" dataKey={cfg.key} stroke={cfg.color} fill={`url(#${cfg.gradId})`} strokeWidth={2} />
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
@@ -392,13 +455,11 @@ const Reports = () => {
                         </div>
                         <div className="flex items-center justify-between pl-4">
                           <div className="text-xs text-muted-foreground font-body">
-                            <span>P1: {avg1}{item.unit}/day</span>
+                            <span>P1: <AnimatedNumber value={avg1} />{item.unit}/day</span>
                             <span className="mx-2">→</span>
-                            <span>P2: {avg2}{item.unit}/day</span>
+                            <span>P2: <AnimatedNumber value={avg2} />{item.unit}/day</span>
                           </div>
-                          <div className={`flex items-center gap-1 text-xs font-body font-medium ${
-                            diff === 0 ? "text-muted-foreground" : isPositive ? "text-primary" : "text-destructive"
-                          }`}>
+                          <div className={`flex items-center gap-1 text-xs font-body font-medium ${getComparisonColor(item.key, diff)}`}>
                             {diff !== 0 && (isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />)}
                             {diff > 0 ? "+" : ""}{diff}{item.unit}
                           </div>
@@ -413,15 +474,21 @@ const Reports = () => {
         </div>
       )}
 
-      {/* Blood report upload */}
+      {/* Blood report - Coming Soon */}
       <div className="px-6 mt-4">
-        <div className="bg-card rounded-3xl p-6 border border-border">
+        <div className="bg-card rounded-3xl p-6 border border-border opacity-50 relative pointer-events-none">
+          <div className="absolute top-4 right-4">
+            <span className="bg-muted text-muted-foreground px-2.5 py-1 rounded-full text-[10px] font-body font-medium">
+              Coming Soon
+            </span>
+          </div>
           <div className="flex items-center gap-3 mb-3">
             <Upload className="w-5 h-5 text-accent" />
             <p className="font-body font-medium text-foreground">Blood Report</p>
           </div>
-          <p className="text-sm text-muted-foreground font-body mb-4">Upload your blood report to connect nutrition with biomarkers.</p>
-          <Button variant="outline" className="rounded-xl w-full">Upload Report</Button>
+          <p className="text-sm text-muted-foreground font-body">
+            Upload your blood report to connect nutrition with biomarkers.
+          </p>
         </div>
       </div>
 

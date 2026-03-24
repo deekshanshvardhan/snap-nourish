@@ -1,61 +1,78 @@
 import { Flame } from "lucide-react";
 import { useMemo } from "react";
-
-interface Meal {
-  timestamp: string;
-}
+import { motion } from "framer-motion";
 
 const LoggingStreak = () => {
-  const { streak, missed } = useMemo(() => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const { streak, last7Days } = useMemo(() => {
+    const meals: { timestamp: string }[] = JSON.parse(localStorage.getItem("meals") || "[]");
     const daysWithMeals = new Set(
       meals.map((m) => new Date(m.timestamp).toDateString())
     );
 
     let currentStreak = 0;
-    let missedDays = 0;
     const today = new Date();
 
-    // Count streak backwards from today
     for (let i = 0; i < 30; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       if (daysWithMeals.has(d.toDateString())) {
         currentStreak++;
       } else if (i === 0) {
-        // today hasn't been logged yet, don't break streak
         continue;
       } else {
         break;
       }
     }
 
-    // Count missed in last 7 days
-    for (let i = 0; i < 7; i++) {
+    const last7: boolean[] = [];
+    for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      if (!daysWithMeals.has(d.toDateString())) {
-        missedDays++;
-      }
+      last7.push(daysWithMeals.has(d.toDateString()));
     }
 
-    return { streak: currentStreak, missed: missedDays };
+    return { streak: currentStreak, last7Days: last7 };
   }, []);
 
+  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
+  const todayIdx = new Date().getDay();
+  const orderedLabels = Array.from({ length: 7 }, (_, i) => {
+    const idx = (todayIdx - 6 + i + 7) % 7;
+    return dayLabels[idx === 0 ? 6 : idx - 1];
+  });
+
   return (
-    <div className="flex items-center gap-3 bg-card rounded-2xl px-4 py-3 border border-border">
-      <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center">
-        <Flame className="w-4 h-4 text-accent" />
+    <div className="flex items-center gap-3 bg-card rounded-2xl px-4 py-3 border border-border hover:shadow-sm transition-shadow">
+      <div className="w-9 h-9 rounded-full bg-accent/15 flex items-center justify-center relative shrink-0">
+        {streak >= 3 && (
+          <motion.div
+            className="absolute inset-0 rounded-full bg-accent/10"
+            animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0, 0.4] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+        )}
+        <Flame
+          className={`w-4 h-4 text-accent relative z-10 ${streak >= 3 ? "animate-pulse-dot" : ""}`}
+        />
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <p className="text-sm font-body font-medium text-foreground">
           {streak} Day{streak !== 1 ? "s" : ""} Logged
         </p>
-        {missed > 0 && (
-          <p className="text-[10px] text-muted-foreground font-body">
-            {missed} missed in last 7 days
-          </p>
-        )}
+        <div className="flex gap-1.5 mt-1.5">
+          {last7Days.map((filled, i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <div
+                className={`w-3.5 h-3.5 rounded-full border-[1.5px] transition-all ${
+                  filled
+                    ? "bg-primary border-primary"
+                    : "bg-transparent border-muted-foreground/20"
+                }`}
+              />
+              <span className="text-[8px] text-muted-foreground/60 font-body">{orderedLabels[i]}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
