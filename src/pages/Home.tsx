@@ -50,7 +50,7 @@ const Home = () => {
     if (localStorage.getItem("personalization-completed") === "true") return;
     if (localStorage.getItem("personalization-dismissed") === "true") return;
     const meals = JSON.parse(localStorage.getItem("meals") || "[]");
-    if (meals.length >= 2) {
+    if (meals.length >= 1) {
       setShowPersonalization(true);
     }
   };
@@ -324,6 +324,8 @@ const Home = () => {
           </button>
 
           <button
+            type="button"
+            data-testid="camera-capture"
             onClick={handleCapture}
             className="w-[92px] h-[92px] rounded-full border-4 border-primary flex items-center justify-center active:scale-95 transition-transform"
           >
