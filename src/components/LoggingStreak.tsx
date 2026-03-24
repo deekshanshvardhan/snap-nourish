@@ -1,10 +1,12 @@
 import { Flame } from "lucide-react";
 import { useMemo } from "react";
 import { motion } from "framer-motion";
+import { Meal } from "@/lib/mealUtils";
+import { getMeals } from "@/lib/storage";
 
 const LoggingStreak = () => {
-  const { streak, last7Days } = useMemo(() => {
-    const meals: { timestamp: string }[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const { streak, weekDays } = useMemo(() => {
+    const meals: Meal[] = getMeals();
     const daysWithMeals = new Set(
       meals.map((m) => new Date(m.timestamp).toDateString())
     );
@@ -24,22 +26,19 @@ const LoggingStreak = () => {
       }
     }
 
-    const last7: boolean[] = [];
-    for (let i = 6; i >= 0; i--) {
+    const weekDays: boolean[] = [];
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    for (let i = 0; i < 7; i++) {
       const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      last7.push(daysWithMeals.has(d.toDateString()));
+      d.setDate(d.getDate() + mondayOffset + i);
+      weekDays.push(daysWithMeals.has(d.toDateString()));
     }
 
-    return { streak: currentStreak, last7Days: last7 };
+    return { streak: currentStreak, weekDays };
   }, []);
 
-  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
-  const todayIdx = new Date().getDay();
-  const orderedLabels = Array.from({ length: 7 }, (_, i) => {
-    const idx = (todayIdx - 6 + i + 7) % 7;
-    return dayLabels[idx === 0 ? 6 : idx - 1];
-  });
+  const dayLabels = ["M", "T", "W", "Th", "F", "S", "S"];
 
   return (
     <div className="flex items-center gap-3 bg-card rounded-2xl px-4 py-3 border border-border hover:shadow-sm transition-shadow">
@@ -60,7 +59,7 @@ const LoggingStreak = () => {
           {streak} Day{streak !== 1 ? "s" : ""} Logged
         </p>
         <div className="flex gap-1.5 mt-1.5">
-          {last7Days.map((filled, i) => (
+          {weekDays.map((filled, i) => (
             <div key={i} className="flex flex-col items-center gap-0.5">
               <div
                 className={`w-3.5 h-3.5 rounded-full border-[1.5px] transition-all ${
@@ -69,7 +68,7 @@ const LoggingStreak = () => {
                     : "bg-transparent border-muted-foreground/20"
                 }`}
               />
-              <span className="text-[8px] text-muted-foreground/60 font-body">{orderedLabels[i]}</span>
+              <span className="text-[8px] text-muted-foreground/60 font-body">{dayLabels[i]}</span>
             </div>
           ))}
         </div>

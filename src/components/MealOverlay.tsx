@@ -2,19 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
-
-interface Meal {
-  id: number;
-  type: string;
-  timestamp: string;
-  description: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-const roundApprox = (n: number, step = 10) => Math.round(n / step) * step;
+import { Meal, roundApprox } from "@/lib/mealUtils";
 
 const IDLE_DELAY = 2000;
 const RING_DURATION = 3000;

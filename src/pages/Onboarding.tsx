@@ -1,11 +1,17 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
-import { Camera, Apple, ChevronLeft, ChevronRight } from "lucide-react";
+import { Camera, Apple, ChevronLeft, ChevronRight, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { setFlag, saveAuthUser, saveProfile } from "@/lib/storage";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 
-type Step = "intro" | "auth" | "camera-permission";
-const STEPS: Step[] = ["intro", "auth", "camera-permission"];
+type Step = "intro" | "auth" | "profile" | "camera-permission";
+const STEPS: Step[] = ["intro", "auth", "profile", "camera-permission"];
 
 const floatingEmojis = [
   { emoji: "🥑", top: "10%", left: "15%", delay: 0 },
@@ -31,6 +37,11 @@ const StepDots = ({ current, total }: { current: number; total: number }) => (
 
 const Onboarding = () => {
   const [step, setStep] = useState<Step>("intro");
+  const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [goal, setGoal] = useState("");
   const navigate = useNavigate();
   const currentIdx = STEPS.indexOf(step);
 
@@ -49,9 +60,34 @@ const Onboarding = () => {
     else if (info.offset.x > 60) goPrev();
   };
 
-  const handleAuth = (provider: string) => {
-    localStorage.setItem("auth-provider", provider);
-    localStorage.setItem("auth-user", JSON.stringify({ provider, name: "User", loggedIn: true }));
+  const handleAuth = async (provider: "google" | "apple") => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      toast.error("Sign in failed. Please try again.");
+    }
+  };
+
+  const handleProfileSubmit = () => {
+    const profile: Record<string, string> = {};
+    if (name) profile.name = name;
+    if (age) profile.age = age;
+    if (height) profile.height = height;
+    if (weight) profile.weight = weight;
+    if (goal) profile.goal = goal;
+    if (Object.keys(profile).length > 0) saveProfile(profile);
+    if (name) {
+      const provider = localStorage.getItem("auth-provider") ?? "unknown";
+      saveAuthUser({ provider, name, loggedIn: true });
+    }
+    setStep("camera-permission");
+  };
+
+  const handleProfileSkip = () => {
     setStep("camera-permission");
   };
 
@@ -61,14 +97,16 @@ const Onboarding = () => {
     } catch {
       // continue
     }
-    localStorage.setItem("onboarded", "true");
-    localStorage.setItem("show-first-hint", "true");
+    setFlag("onboarded", "true");
+    setFlag("showFirstHint", "true");
+    setFlag("photoOptIn", "true");
     navigate("/home", { replace: true });
   };
 
   const handleSkipCamera = () => {
-    localStorage.setItem("onboarded", "true");
-    localStorage.setItem("show-first-hint", "true");
+    setFlag("onboarded", "true");
+    setFlag("showFirstHint", "true");
+    setFlag("photoOptIn", "true");
     navigate("/home", { replace: true });
   };
 
@@ -257,6 +295,118 @@ const Onboarding = () => {
           </motion.div>
         )}
 
+        {step === "profile" && (
+          <motion.div
+            key="profile"
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -40 }}
+            transition={{ duration: 0.35 }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
+            onDragEnd={handleDragEnd}
+            className="flex-1 flex flex-col items-center px-8 pt-16 overflow-y-auto"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+              className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5"
+            >
+              <User className="w-7 h-7 text-primary" />
+            </motion.div>
+
+            <h2 className="font-display text-3xl text-foreground mb-2">About you</h2>
+            <p className="text-muted-foreground font-body text-sm mb-8 text-center">
+              Help us personalize your nutrition insights.
+              <br />
+              <span className="text-muted-foreground/50">All fields are optional.</span>
+            </p>
+
+            <div className="w-full space-y-5 mb-8">
+              <div className="space-y-2">
+                <Label htmlFor="onb-name" className="text-sm font-body font-medium text-foreground">Name</Label>
+                <Input
+                  id="onb-name"
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-14 rounded-xl text-lg bg-card"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="onb-age" className="text-sm font-body font-medium text-foreground">Age</Label>
+                <Input
+                  id="onb-age"
+                  type="number"
+                  placeholder="25"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  className="h-14 rounded-xl text-lg bg-card"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="onb-height" className="text-sm font-body font-medium text-foreground">Height (cm)</Label>
+                  <Input
+                    id="onb-height"
+                    type="number"
+                    placeholder="170"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    className="h-14 rounded-xl text-lg bg-card"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="onb-weight" className="text-sm font-body font-medium text-foreground">Weight (kg)</Label>
+                  <Input
+                    id="onb-weight"
+                    type="number"
+                    placeholder="70"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    className="h-14 rounded-xl text-lg bg-card"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-body font-medium text-foreground">Goal</Label>
+                <Select value={goal} onValueChange={setGoal}>
+                  <SelectTrigger className="h-14 rounded-xl text-lg bg-card">
+                    <SelectValue placeholder="Select a goal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lose">Lose weight</SelectItem>
+                    <SelectItem value="maintain">Maintain weight</SelectItem>
+                    <SelectItem value="gain">Gain weight</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="w-full pb-16">
+              <Button
+                onClick={handleProfileSubmit}
+                className="w-full h-14 text-lg rounded-2xl mb-3"
+                size="lg"
+              >
+                Continue
+              </Button>
+              <button
+                onClick={handleProfileSkip}
+                className="w-full text-center text-muted-foreground text-sm font-body py-2 hover:underline underline-offset-4 transition-all hover:text-foreground"
+              >
+                Skip for now
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {step === "camera-permission" && (
           <motion.div
             key="camera"
@@ -302,9 +452,14 @@ const Onboarding = () => {
             <p className="text-muted-foreground font-body text-sm mb-2 max-w-xs">
               Your camera lets you instantly log meals by snapping a photo — no typing needed.
             </p>
-            <p className="text-muted-foreground/50 font-body text-xs mb-10 max-w-xs">
-              Photos are analyzed on-device and never shared.
+            <p className="text-muted-foreground/50 font-body text-xs mb-3 max-w-xs">
+              Meal photos are stored securely to improve nutrition accuracy over time.
+              You can change this anytime in Settings.
             </p>
+            <div className="inline-flex items-center gap-1.5 bg-primary/8 border border-primary/15 rounded-full px-3 py-1 mb-8">
+              <Camera className="w-3 h-3 text-primary/70" />
+              <span className="text-[11px] font-body text-primary/70">Photos help us get your macros right</span>
+            </div>
 
             <Button
               onClick={handleCameraPermission}

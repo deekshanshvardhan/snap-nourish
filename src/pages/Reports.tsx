@@ -9,15 +9,8 @@ import BottomNav from "@/components/BottomNav";
 import FloatingLogButton from "@/components/FloatingLogButton";
 import AnimatedNumber from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
-
-interface Meal {
-  id: number;
-  timestamp: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
+import { Meal } from "@/lib/mealUtils";
+import { getMeals, getProfile } from "@/lib/storage";
 
 type Tab = "daily" | "weekly" | "monthly" | "custom";
 
@@ -77,7 +70,7 @@ const Reports = () => {
   const [trendRange, setTrendRange] = useState<7 | 30 | 90>(7);
   const [showTrends, setShowTrends] = useState(false);
 
-  const meals: Meal[] = useMemo(() => JSON.parse(localStorage.getItem("meals") || "[]"), []);
+  const meals: Meal[] = useMemo(() => getMeals(), []);
 
   const today = new Date().toDateString();
   const todayMeals = meals.filter((m) => new Date(m.timestamp).toDateString() === today);
@@ -152,7 +145,7 @@ const Reports = () => {
 
   const userGoal = useMemo(() => {
     try {
-      const profile = JSON.parse(localStorage.getItem("nutrition-profile") || "{}");
+      const profile = getProfile();
       return profile.goal || "maintain";
     } catch { return "maintain"; }
   }, []);

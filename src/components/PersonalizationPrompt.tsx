@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { saveProfile, setFlag } from "@/lib/storage";
 
 interface Props {
   onDismiss: () => void;
@@ -23,13 +24,12 @@ const PersonalizationPrompt = ({ onDismiss, onSave }: Props) => {
     if (weight) profile.weight = weight;
     if (age) profile.age = age;
     if (goal) profile.goal = goal;
-    localStorage.setItem("nutrition-profile", JSON.stringify(profile));
-    localStorage.setItem("personalization-completed", "true");
+    saveProfile(profile);
     onSave();
   };
 
   const handleSkip = () => {
-    localStorage.setItem("personalization-dismissed", "true");
+    setFlag("personalizationDismissed", "true");
     onDismiss();
   };
 

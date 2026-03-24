@@ -59,7 +59,7 @@ const slotDotColors: Record<string, string> = {
 };
 
 const MealTimeline = ({ meals, onLogMeal, onQuickLog, pinnedMeals = {}, onMealUpdated }: MealTimelineProps) => {
-  const [editingMealId, setEditingMealId] = useState<number | null>(null);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState("");
   const [editLabel, setEditLabel] = useState("");
   const templates = getTemplates();

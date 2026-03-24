@@ -1,25 +1,20 @@
 import { useMemo } from "react";
 import { RotateCcw } from "lucide-react";
-
-interface Meal {
-  id: number;
-  description: string;
-  calories: number;
-  timestamp: string;
-}
+import { Meal } from "@/lib/mealUtils";
+import { getMeals, saveMeals } from "@/lib/storage";
 
 const RecentMeals = () => {
   const recent = useMemo(() => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     return meals.slice(-3).reverse();
   }, []);
 
   if (recent.length === 0) return null;
 
   const repeatMeal = (meal: Meal) => {
-    const meals = JSON.parse(localStorage.getItem("meals") || "[]");
-    meals.push({ ...meal, id: Date.now(), timestamp: new Date().toISOString() });
-    localStorage.setItem("meals", JSON.stringify(meals));
+    const meals = getMeals();
+    meals.push({ ...meal, id: crypto.randomUUID(), timestamp: new Date().toISOString() });
+    saveMeals(meals);
   };
 
   return (

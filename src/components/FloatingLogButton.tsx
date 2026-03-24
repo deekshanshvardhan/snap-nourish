@@ -2,6 +2,8 @@ import { Plus, Camera, Zap, Type, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { Meal } from "@/lib/mealUtils";
+import { getMeals } from "@/lib/storage";
 
 const FloatingLogButton = () => {
   const [open, setOpen] = useState(false);
@@ -9,9 +11,9 @@ const FloatingLogButton = () => {
 
   const hasMealsToday = useMemo(() => {
     try {
-      const meals = JSON.parse(localStorage.getItem("meals") || "[]");
+      const meals = getMeals();
       const today = new Date().toDateString();
-      return meals.some((m: { timestamp: string }) => new Date(m.timestamp).toDateString() === today);
+      return meals.some((m: Meal) => new Date(m.timestamp).toDateString() === today);
     } catch {
       return false;
     }

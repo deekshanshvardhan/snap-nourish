@@ -1,3 +1,6 @@
+import { Meal } from "@/lib/mealUtils";
+import { getMeals, getStoredTemplates, saveStoredTemplates, getDismissedPrompts, saveDismissedPrompts } from "@/lib/storage";
+
 export interface MealTemplate {
   id: string;
   name: string;
@@ -10,22 +13,7 @@ export interface MealTemplate {
   mealTiming: "breakfast" | "lunch" | "dinner" | "snack";
 }
 
-interface Meal {
-  id: number;
-  type: string;
-  timestamp: string;
-  description: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
-
-const TEMPLATES_KEY = "mealTemplates";
-const TEMPLATE_PROMPT_KEY = "templatePromptsDismissed";
-
-export const getTemplates = (): MealTemplate[] =>
-  JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]");
+export const getTemplates = (): MealTemplate[] => getStoredTemplates();
 
 export const saveTemplate = (template: MealTemplate) => {
   const templates = getTemplates();
@@ -35,12 +23,12 @@ export const saveTemplate = (template: MealTemplate) => {
   } else {
     templates.push(template);
   }
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  saveStoredTemplates(templates);
 };
 
 export const removeTemplate = (id: string) => {
   const templates = getTemplates().filter((t) => t.id !== id);
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  saveStoredTemplates(templates);
 };
 
 const getTimingFromHour = (hour: number): MealTemplate["mealTiming"] => {
@@ -57,9 +45,9 @@ const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
  * prompted yet. Returns the first candidate found.
  */
 export const detectTemplateCandidates = (): Meal | null => {
-  const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const meals = getMeals();
   const templates = getTemplates();
-  const dismissed: string[] = JSON.parse(localStorage.getItem(TEMPLATE_PROMPT_KEY) || "[]");
+  const dismissed = getDismissedPrompts();
 
   const counts: Record<string, { count: number; meal: Meal }> = {};
   for (const m of meals) {
@@ -80,9 +68,9 @@ export const detectTemplateCandidates = (): Meal | null => {
 };
 
 export const dismissTemplatePrompt = (description: string) => {
-  const dismissed: string[] = JSON.parse(localStorage.getItem(TEMPLATE_PROMPT_KEY) || "[]");
+  const dismissed = getDismissedPrompts();
   dismissed.push(normalize(description));
-  localStorage.setItem(TEMPLATE_PROMPT_KEY, JSON.stringify(dismissed));
+  saveDismissedPrompts(dismissed);
 };
 
 export const createTemplateFromMeal = (meal: Meal, name: string): MealTemplate => {
@@ -121,7 +109,7 @@ export const getFrequentTemplates = (): MealTemplate[] => {
 
 /** Build quick-log items from raw meals when no templates exist yet */
 export const getFrequentMealsFromHistory = (): { description: string; meal: Meal }[] => {
-  const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const meals = getMeals();
   const counts: Record<string, { count: number; meal: Meal }> = {};
   for (const m of meals) {
     if (m.description === "Photo meal") continue;

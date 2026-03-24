@@ -11,6 +11,7 @@ import RecentlyLogged from "@/components/RecentlyLogged";
 import { MealTemplate, saveTemplate } from "@/lib/mealTemplates";
 import { useNavigate } from "react-router-dom";
 import { Meal } from "@/lib/mealUtils";
+import { getMeals, saveMeals, getAuthUser, getPinnedMeals } from "@/lib/storage";
 
 const getGreeting = (): string => {
   const hour = new Date().getHours();
@@ -38,15 +39,15 @@ const Insights = () => {
 
   const userName = useMemo(() => {
     try {
-      const user = JSON.parse(localStorage.getItem("auth-user") || "{}");
-      return user.name || null;
+      const user = getAuthUser();
+      return (user.name as string) || null;
     } catch {
       return null;
     }
   }, []);
 
   const dayMeals = useMemo(() => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     const target = selectedDate.toDateString();
     return meals
       .filter((m) => new Date(m.timestamp).toDateString() === target)
@@ -77,14 +78,14 @@ const Insights = () => {
   }, [totals, dayMeals.length]);
 
   const datesWithMeals = useMemo(() => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     const set = new Set<string>();
     meals.forEach((m) => set.add(new Date(m.timestamp).toDateString()));
     return set;
   }, [mealsVersion]);
 
   const pinnedMeals: Record<string, string[]> = useMemo(() => {
-    return JSON.parse(localStorage.getItem("pinnedMeals") || "{}");
+    return getPinnedMeals();
   }, [mealsVersion]);
 
   const navigateDate = (dir: number) => {
@@ -101,7 +102,7 @@ const Insights = () => {
     ts.setHours(hour, 0, 0, 0);
 
     const meal: Meal = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       type: "template",
       timestamp: ts.toISOString(),
       description: template.name,
@@ -110,9 +111,9 @@ const Insights = () => {
       carbs: template.carbs,
       fat: template.fat,
     };
-    const meals = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     meals.push(meal);
-    localStorage.setItem("meals", JSON.stringify(meals));
+    saveMeals(meals);
 
     template.count++;
     template.lastLogged = new Date().toISOString();
@@ -120,10 +121,10 @@ const Insights = () => {
     setMealsVersion((v) => v + 1);
   };
 
-  const handleDeleteMeal = (mealId: number) => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const handleDeleteMeal = (mealId: string) => {
+    const meals = getMeals();
     const filtered = meals.filter((m) => m.id !== mealId);
-    localStorage.setItem("meals", JSON.stringify(filtered));
+    saveMeals(filtered);
     setMealsVersion((v) => v + 1);
   };
 

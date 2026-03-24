@@ -8,6 +8,7 @@ import {
   getCurrentTimeSuggestionLabel,
   MealTemplate,
 } from "@/lib/mealTemplates";
+import { roundApprox } from "@/lib/mealUtils";
 
 interface QuickLogProps {
   onLogTemplate: (template: MealTemplate) => void;
@@ -21,8 +22,6 @@ const timingColors: Record<string, string> = {
   dinner: "border-l-nutrition-protein",
   snack: "border-l-nutrition-fat",
 };
-
-const roundApprox = (n: number, step = 10) => Math.round(n / step) * step;
 
 const QuickLog = ({ onLogTemplate, onLogMeal, refreshKey }: QuickLogProps) => {
   const timeSuggested = useMemo(() => getTimeSuggestedTemplates(), [refreshKey]);

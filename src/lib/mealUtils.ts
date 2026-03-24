@@ -1,5 +1,5 @@
 export interface Meal {
-  id: number;
+  id: string;
   type: string;
   timestamp: string;
   description: string;
@@ -44,12 +44,14 @@ export const getSimulatedDescription = (): string => {
 
 export const roundApprox = (n: number, step = 10) => Math.round(n / step) * step;
 
+import { getMeals, saveMeals } from "@/lib/storage";
+
 /** Update a meal in localStorage */
 export const updateMealInStorage = (updatedMeal: Meal) => {
-  const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+  const meals = getMeals();
   const idx = meals.findIndex((m) => m.id === updatedMeal.id);
   if (idx !== -1) {
     meals[idx] = updatedMeal;
-    localStorage.setItem("meals", JSON.stringify(meals));
+    saveMeals(meals);
   }
 };

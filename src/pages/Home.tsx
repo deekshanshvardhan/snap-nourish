@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Image, Type, X, Send, Sparkles, Check } from "lucide-react";
+import { Camera, Image, Type, X, Send, Sparkles, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BottomNav from "@/components/BottomNav";
@@ -14,7 +14,12 @@ import {
   dismissTemplatePrompt,
   MealTemplate,
 } from "@/lib/mealTemplates";
-import { Meal, getSimulatedDescription, inferMealLabel } from "@/lib/mealUtils";
+import { Meal, inferMealLabel } from "@/lib/mealUtils";
+import { getMeals, saveMeals, getFlag, removeFlag } from "@/lib/storage";
+import { useCamera } from "@/hooks/useCamera";
+import { analyzePhoto } from "@/lib/analyzePhoto";
+import { analyzeText } from "@/lib/analyzeText";
+import { toast } from "sonner";
 
 const Home = () => {
   const [showTextInput, setShowTextInput] = useState(false);
@@ -25,6 +30,7 @@ const Home = () => {
   const [showHint, setShowHint] = useState(false);
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [templateSaved, setTemplateSaved] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [templateCandidate, setTemplateCandidate] = useState<Meal | null>(null);
   const [templateName, setTemplateName] = useState("");
@@ -32,45 +38,36 @@ const Home = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const templateInputRef = useRef<HTMLInputElement>(null);
 
+  const { videoRef, isActive: cameraActive, error: cameraError, start: startCamera, captureFrame } = useCamera();
+
+  useEffect(() => {
+    startCamera();
+  }, [startCamera]);
+
   const checkTemplates = () => {
     setTemplateCandidate(detectTemplateCandidates());
   };
 
   useEffect(() => {
     checkTemplates();
-    if (localStorage.getItem("show-first-hint") === "true") {
+    if (getFlag("showFirstHint") === "true") {
       setShowHint(true);
-      localStorage.removeItem("show-first-hint");
+      removeFlag("showFirstHint");
       setTimeout(() => setShowHint(false), 4000);
     }
   }, []);
 
   const maybeShowPersonalization = () => {
-    if (localStorage.getItem("personalization-completed") === "true") return;
-    if (localStorage.getItem("personalization-dismissed") === "true") return;
-    const meals = JSON.parse(localStorage.getItem("meals") || "[]");
+    if (getFlag("personalizationCompleted") === "true") return;
+    if (getFlag("personalizationDismissed") === "true") return;
+    const meals = getMeals();
     if (meals.length >= 1) setShowPersonalization(true);
   };
 
-  const generateMeal = (description: string, type: string): Meal => {
-    const timestamp = new Date().toISOString();
-    return {
-      id: Date.now(),
-      type,
-      timestamp,
-      description,
-      calories: Math.floor(Math.random() * 400 + 200),
-      protein: Math.floor(Math.random() * 25 + 10),
-      carbs: Math.floor(Math.random() * 50 + 20),
-      fat: Math.floor(Math.random() * 20 + 5),
-      mealLabel: inferMealLabel(timestamp),
-    };
-  };
-
   const saveMeal = (meal: Meal) => {
-    const meals = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     meals.push(meal);
-    localStorage.setItem("meals", JSON.stringify(meals));
+    saveMeals(meals);
     setQuickLogKey((k) => k + 1);
     checkTemplates();
     setTimeout(maybeShowPersonalization, 1500);
@@ -80,48 +77,116 @@ const Home = () => {
 
   const handleOverlayConfirm = (meal: Meal, text: string) => {
     if (text.trim()) {
-      const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+      const meals = getMeals();
       const idx = meals.findIndex((m) => m.id === meal.id);
       if (idx !== -1) {
         meals[idx].description = text.trim();
-        localStorage.setItem("meals", JSON.stringify(meals));
+        saveMeals(meals);
         setQuickLogKey((k) => k + 1);
       }
     }
     setOverlay(null);
   };
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
+    if (isAnalyzing) return;
+
     setFlash(true);
     setShowHint(false);
     setTimeout(() => setFlash(false), 150);
-    const meal = generateMeal(getSimulatedDescription(), "photo");
-    saveMeal(meal);
-    showOverlay(meal);
+
+    const frameBlob = await captureFrame();
+    if (!frameBlob) {
+      toast.error("Could not capture frame. Please try again.");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    const timestamp = new Date().toISOString();
+    const mealLabel = inferMealLabel(timestamp);
+
+    try {
+      const result = await analyzePhoto(frameBlob, mealLabel);
+      const meal: Meal = {
+        id: crypto.randomUUID(),
+        type: "photo",
+        timestamp,
+        description: result.description,
+        calories: result.calories,
+        protein: result.protein,
+        carbs: result.carbs,
+        fat: result.fat,
+        photoUrl: result.photoUrl,
+        mealLabel,
+      };
+      saveMeal(meal);
+      showOverlay(meal);
+    } catch (err: any) {
+      toast.error(err.message || "Photo analysis failed. Try typing your meal instead.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleRetake = (meal: Meal) => {
-    const meals: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+    const meals = getMeals();
     const idx = meals.findIndex((m) => m.id === meal.id);
     if (idx !== -1) {
       meals.splice(idx, 1);
-      localStorage.setItem("meals", JSON.stringify(meals));
+      saveMeals(meals);
     }
     setOverlay(null);
   };
 
-  const handleTextLog = () => {
-    if (!textInput.trim()) return;
-    const meal = generateMeal(textInput, "text");
-    saveMeal(meal);
-    showOverlay(meal);
+  const handleTextLog = async () => {
+    if (!textInput.trim() || isAnalyzing) return;
+
+    setIsAnalyzing(true);
+    const timestamp = new Date().toISOString();
+    const mealLabel = inferMealLabel(timestamp);
+    const description = textInput.trim();
+
     setTextInput("");
     setShowTextInput(false);
+
+    try {
+      const result = await analyzeText(description, mealLabel);
+      const meal: Meal = {
+        id: crypto.randomUUID(),
+        type: "text",
+        timestamp,
+        description: result.description,
+        calories: result.calories,
+        protein: result.protein,
+        carbs: result.carbs,
+        fat: result.fat,
+        mealLabel,
+      };
+      saveMeal(meal);
+      showOverlay(meal);
+    } catch {
+      const meal: Meal = {
+        id: crypto.randomUUID(),
+        type: "text",
+        timestamp,
+        description,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        mealLabel,
+      };
+      saveMeal(meal);
+      showOverlay(meal);
+      toast.error("Could not analyze nutrition. Meal saved — you can edit the values.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleLogTemplate = (template: MealTemplate) => {
     const meal: Meal = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       type: "template",
       timestamp: new Date().toISOString(),
       description: template.name,
@@ -139,7 +204,7 @@ const Home = () => {
 
   const handleLogFromHistory = (desc: string, cal: number, prot: number, carbs: number, fat: number) => {
     const meal: Meal = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       type: "quick",
       timestamp: new Date().toISOString(),
       description: desc,
@@ -173,21 +238,58 @@ const Home = () => {
     setTemplateName("");
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const meal = generateMeal(getSimulatedDescription(), "photo");
+    if (!file || isAnalyzing) {
+      e.target.value = "";
+      return;
+    }
+
+    setIsAnalyzing(true);
+    const timestamp = new Date().toISOString();
+    const mealLabel = inferMealLabel(timestamp);
+
+    try {
+      const result = await analyzePhoto(file, mealLabel);
+      const meal: Meal = {
+        id: crypto.randomUUID(),
+        type: "photo",
+        timestamp,
+        description: result.description,
+        calories: result.calories,
+        protein: result.protein,
+        carbs: result.carbs,
+        fat: result.fat,
+        photoUrl: result.photoUrl,
+        mealLabel,
+      };
       saveMeal(meal);
       showOverlay(meal);
+    } catch (err: any) {
+      toast.error(err.message || "Photo analysis failed. Try typing your meal instead.");
+    } finally {
+      setIsAnalyzing(false);
+      e.target.value = "";
     }
-    e.target.value = "";
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-foreground max-w-md mx-auto relative">
+    <div className="flex flex-col min-h-screen bg-foreground max-w-md mx-auto relative overflow-hidden">
+      {/* Full-screen camera feed */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover z-0"
+      />
+      {/* Fallback gradient when camera is not active */}
+      {!cameraActive && (
+        <div className="absolute inset-0 bg-gradient-to-b from-foreground/90 to-foreground z-0" />
+      )}
+
       {/* Camera viewfinder area */}
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-foreground/90 to-foreground" />
 
         {/* Flash */}
         <AnimatePresence>
@@ -202,9 +304,24 @@ const Home = () => {
           )}
         </AnimatePresence>
 
+        {/* Analysis loading overlay */}
+        <AnimatePresence>
+          {isAnalyzing && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-foreground/60 backdrop-blur-sm z-40 flex flex-col items-center justify-center gap-3"
+            >
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <p className="text-primary/80 font-body text-sm">Analyzing your meal...</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Viewfinder */}
         <div className="relative z-10 w-64 h-64 animate-breathe">
-          {/* Corner brackets - thicker */}
+          {/* Corner brackets */}
           <div className="absolute top-0 left-0 w-12 h-12 border-t-[3px] border-l-[3px] border-primary/60 rounded-tl-xl" />
           <div className="absolute top-0 right-0 w-12 h-12 border-t-[3px] border-r-[3px] border-primary/60 rounded-tr-xl" />
           <div className="absolute bottom-0 left-0 w-12 h-12 border-b-[3px] border-l-[3px] border-primary/60 rounded-bl-xl" />
@@ -222,7 +339,16 @@ const Home = () => {
 
           <div className="flex items-center justify-center h-full">
             <AnimatePresence>
-              {showHint ? (
+              {cameraError ? (
+                <motion.p
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-primary/70 font-body text-sm text-center px-4"
+                >
+                  {cameraError}. Use text or gallery instead.
+                </motion.p>
+              ) : showHint ? (
                 <motion.p
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -231,9 +357,9 @@ const Home = () => {
                 >
                   Point at your meal to log it
                 </motion.p>
-              ) : (
+              ) : !cameraActive ? (
                 <p className="text-primary/40 font-body text-sm">Point at your meal</p>
-              )}
+              ) : null}
             </AnimatePresence>
           </div>
         </div>
@@ -275,8 +401,18 @@ const Home = () => {
                       onKeyDown={(e) => e.key === "Enter" && handleTextLog()}
                       autoFocus
                     />
-                    <Button size="icon" className="h-12 w-12 rounded-xl shrink-0" onClick={handleTextLog} aria-label="Send">
-                      <Send className="w-5 h-5" />
+                    <Button
+                      size="icon"
+                      className="h-12 w-12 rounded-xl shrink-0"
+                      onClick={handleTextLog}
+                      disabled={isAnalyzing}
+                      aria-label="Send"
+                    >
+                      {isAnalyzing ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
                     </Button>
                     <Button
                       size="icon"
@@ -363,12 +499,10 @@ const Home = () => {
           )}
         </AnimatePresence>
 
-        {/* Gradient fade at bottom of viewfinder */}
-        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-foreground to-transparent pointer-events-none z-5" />
       </div>
 
       {/* Camera controls */}
-      <div className="bg-foreground/95 backdrop-blur-sm pb-28 pt-6 px-6 relative z-10">
+      <div className="pb-28 pt-6 px-6 relative z-10">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => setShowTextInput(!showTextInput)}
@@ -386,12 +520,17 @@ const Home = () => {
             type="button"
             data-testid="camera-capture"
             onClick={handleCapture}
-            className="relative w-[92px] h-[92px] rounded-full border-4 border-primary flex items-center justify-center active:scale-95 transition-transform"
+            disabled={isAnalyzing}
+            className="relative w-[92px] h-[92px] rounded-full border-4 border-primary flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
             aria-label="Capture photo"
           >
             <span className="absolute inset-[-4px] rounded-full border-2 border-primary/30 animate-ring-pulse" />
             <div className="w-[76px] h-[76px] rounded-full bg-primary flex items-center justify-center">
-              <Camera className="w-9 h-9 text-primary-foreground" />
+              {isAnalyzing ? (
+                <Loader2 className="w-9 h-9 text-primary-foreground animate-spin" />
+              ) : (
+                <Camera className="w-9 h-9 text-primary-foreground" />
+              )}
             </div>
           </button>
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { saveProfile, setFlag } from "@/lib/storage";
 
 const ProfileSetup = () => {
   const navigate = useNavigate();
@@ -20,14 +21,14 @@ const ProfileSetup = () => {
     if (weight) profile.weight = weight;
     if (goal) profile.goal = goal;
     if (Object.keys(profile).length > 0) {
-      localStorage.setItem("nutrition-profile", JSON.stringify(profile));
+      saveProfile(profile);
     }
-    localStorage.setItem("onboarded", "true");
+    setFlag("onboarded", "true");
     navigate("/home", { replace: true });
   };
 
   const handleSkip = () => {
-    localStorage.setItem("onboarded", "true");
+    setFlag("onboarded", "true");
     navigate("/home", { replace: true });
   };
 

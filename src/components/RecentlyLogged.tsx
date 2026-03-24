@@ -2,24 +2,25 @@ import { useState } from "react";
 import { Camera, Type, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Meal, inferMealLabel, roundApprox } from "@/lib/mealUtils";
+import { getMeals, saveMeals } from "@/lib/storage";
 
 interface Props {
   meals: Meal[];
-  onDelete?: (mealId: number) => void;
+  onDelete?: (mealId: string) => void;
 }
 
 const RecentlyLogged = ({ meals, onDelete }: Props) => {
-  const [swipedId, setSwipedId] = useState<number | null>(null);
+  const [swipedId, setSwipedId] = useState<string | null>(null);
 
   if (meals.length === 0) return null;
 
-  const handleDelete = (mealId: number) => {
+  const handleDelete = (mealId: string) => {
     if (onDelete) {
       onDelete(mealId);
     } else {
-      const stored: Meal[] = JSON.parse(localStorage.getItem("meals") || "[]");
+      const stored = getMeals();
       const filtered = stored.filter((m) => m.id !== mealId);
-      localStorage.setItem("meals", JSON.stringify(filtered));
+      saveMeals(filtered);
     }
     setSwipedId(null);
   };
